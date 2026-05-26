@@ -1,12 +1,22 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
+import cors from "cors";
 
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json);
+  // Utilize the cors middleware with standard configuration
+  app.use(cors({
+    origin: "*",
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
+  }));
+
+  // Fix: express.json must be called to return the middleware function
+  app.use(express.json());
 
   // API Route for SQL translation proxy
   app.post("/api/translate", async (req, res) => {
@@ -21,7 +31,7 @@ async function startServer() {
 
       const response = await fetch(
         `https://fix-sql.onrender.com/translate?text=${text}&language=${language}`, {
-             method: "POST",
+             method: "POST"
       });
 
       if (!response.ok) {
