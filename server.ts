@@ -6,7 +6,7 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json());
+  app.use(express.json);
 
   // API Route for SQL translation proxy
   app.post("/api/translate", async (req, res) => {
