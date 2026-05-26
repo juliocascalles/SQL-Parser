@@ -1,0 +1,6 @@
+{
+  "name": "SQL-Parser",
+  "description": "An interactive SQL query builder using visual Blockly blocks and an alternative manual SQL text parser with API translation to multiple database languages.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
