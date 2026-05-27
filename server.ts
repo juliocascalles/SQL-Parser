@@ -50,14 +50,15 @@ async function startServer() {
     try{
         data = await apiResponse.json().catch(() => ({}));
     } catch (error){
-        const details = {
-          var_type: typeof(data),
-          is_array: Array.isArray(data),
-          data: data
+        const is_Array = Array.isArray(data)
+        var var_type = ''
+        if (is_Array){
+           var_type = 'Array'
+        }else{
+           var_type = typeof(data)
         }
         return res.status(417).json({
-          error: "Tipo de resposta incompatível com a esperada.",
-          detail: details
+          error: `Tipo esperado : json. // Tipo recebido: ${var_type}`
         })
     }
     if (apiResponse.status === 200) {
