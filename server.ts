@@ -2,6 +2,7 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import cors from "cors";
+import axios from "axios";
 
 async function startServer() {
   const app = express();
@@ -20,7 +21,6 @@ async function startServer() {
 
   // API Route for SQL translation proxy
   app.post("/api/translate", async (req, res) => {
-    var apiResponse;
     try {
       const { text, language } = req.body;
 
@@ -28,49 +28,44 @@ async function startServer() {
         return res.status(400).json({ error: "Parâmetros 'text' e 'language' são obrigatórios." });
       }
 
-      console.log(`Translating SQL with API to: ${language}`);
+      console.log(`Translating SQL with axios to: ${language}`);
 
       const URL_API = 'https://fix-sql.onrender.com/translate';
-      const queryParams = new URLSearchParams({ text, language });
-      
-      apiResponse = await fetch(`${URL_API}?${queryParams.toString()}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
+
+      const response = await axios.post(
+        URL_API,
+        null,
+        {
+          params: { text, language },
+          headers: {
+            'Content-Type': 'application/json'
+          }
         }
+      );
+
+      if (response.status === 200) {
+        return res.status(200).json({
+          result: response.data.result
+        });
+      }
+
+      return res.status(response.status || 400).json({
+        error: "Erro na API externa de tradução",
+        detail: response.data.detail || "Descrição do erro não fornecida pela API."
       });
     } catch (error: any) {
       console.error("Tradução falhou:", error);
+      if (error.response) {
+        return res.status(error.response.status || 400).json({
+          error: "Erro na API externa de tradução",
+          detail: error.response.data?.detail || error.response.data || "Erro retornado pela API de tradução."
+        });
+      }
       return res.status(500).json({
         error: "Falha na comunicação com o servidor de tradução.",
         message: error.message,
       });
     }
-    var data;
-    try{
-        data = await apiResponse.json().catch(() => ({}));
-    } catch (error){
-        const is_Array = Array.isArray(data)
-        var var_type = ''
-        if (is_Array){
-           var_type = 'Array'
-        }else{
-           var_type = typeof(data)
-        }
-        return res.status(417).json({
-          error: `Tipo esperado : json. // Tipo recebido: ${var_type}. Dados => ${data}`
-        })
-    }
-    if (apiResponse.status === 200) {
-      return res.status(200).json({
-        result: data.result
-      });
-    }
-    return res.status(apiResponse.status || 400).json({
-      error: "Erro na API externa de tradução",
-      detail: data.detail || "Descrição do erro não fornecida pela API."
-    });
-
   });
 
   // Serve static files / Vite middleware
