@@ -2,6 +2,7 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import cors from "cors";
+import axios from "axios";
 
 async function startServer() {
   const app = express();
@@ -34,39 +35,36 @@ async function startServer() {
       //        method: "POST"
       // });
 
-      const URL_API = 'https://fix-sql.onrender.com/translate'
+      const URL_API = 'https://fix-sql.onrender.com/translate';
 
-      const response = await fetch(
-        `${URL_API}?text=${text}&language=${language}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            mode: 'cors', // Garante o suporte a Cross-Origin
-            credentials: 'same-origin'
-      });
+      const response = await axios.post(
+        URL_API,
+        null,
+        {
+          params: { text, language },
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
+      );
 
-      if (!response.ok) {
-        // Fallback or read raw text
-        const errorText = await response.text();
-        return res.status(response.status).json({
-          error: "Erro na API externa de tradução",
-          details: errorText || response.statusText,
-        });
-      }
-
-      // Read response content (can be JSON or plain text depending on target API format, let's read as text or JSON safely)
-      const contentType = response.headers.get("content-type");
-      if (contentType && contentType.includes("application/json")) {
-        const data = await response.json();
-        return res.json(data);
+      const contentType = response.headers['content-type'];
+      if (contentType && String(contentType).includes("application/json")) {
+        return res.json(response.data);
       } else {
-        const textResult = await response.text();
-        // Pack into JSON structure so it's consistent
-        return res.json({ result: textResult });
+        if (typeof response.data === 'object' && response.data !== null) {
+          return res.json(response.data);
+        }
+        return res.json({ result: response.data });
       }
     } catch (error: any) {
       console.error("Tradução falhou:", error);
+      if (error.response) {
+        return res.status(error.response.status).json({
+          error: "Erro na API externa de tradução",
+          details: error.response.data,
+        });
+      }
       return res.status(500).json({
         error: "Falha na comunicação com o servidor de tradução.",
         message: error.message,
