@@ -159,7 +159,9 @@ export default function App() {
 
       if (!response.ok) {
         throw new Error(`Erro na API (${response.status})`);
-      }
+      };
+
+      showFeedback("success", `Resposta recebida : ${response}`);
 
       const data = await response.json();
       
@@ -174,32 +176,7 @@ export default function App() {
       setTranslationResult(resultText);
       showFeedback("success", "Tradução concluída com sucesso!");
     } catch (err: any) {
-      console.error(err);
-      
-      // Fallback: If local API fails or routes configured differently, let's try calling directly
-      try {
-        console.log("Tentando chamada direta secundária devido a erro de proxy...");
-        const responseDirect = await fetch("https://fix-sql.onrender.com/translate", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            text: sqlQuery,
-            language: targetLanguage
-          })
-        });
-        if (responseDirect.ok) {
-          const directData = await responseDirect.json();
-          const parsedResult = directData.result || directData.translatedText || directData.translation || JSON.stringify(directData);
-          setTranslationResult(parsedResult);
-          showFeedback("success", "Tradução concluída via canal direto!");
-          return;
-        }
-      } catch (directErr) {
-        console.error("Falha no canal direto também:", directErr);
-      }
-
+      console.error(err);     
       setTranslationResult("");
       showFeedback("error", `Falha ao traduzir: ${err.message || "Verifique a API de tradução."}`);
     } finally {

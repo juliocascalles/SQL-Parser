@@ -58,7 +58,7 @@ async function startServer() {
            var_type = typeof(data)
         }
         return res.status(417).json({
-          error: `Tipo esperado : json. // Tipo recebido: ${var_type}`
+          error: `Tipo esperado : json. // Tipo recebido: ${var_type}. Dados => ${data}`
         })
     }
     if (apiResponse.status === 200) {
