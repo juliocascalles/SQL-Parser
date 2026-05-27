@@ -48,15 +48,19 @@ async function startServer() {
         }
       );
 
-      const contentType = response.headers['content-type'];
-      if (contentType && String(contentType).includes("application/json")) {
-        return res.json(response.data);
-      } else {
-        if (typeof response.data === 'object' && response.data !== null) {
+      if (response.status == 200){
           return res.json(response.data);
-        }
-        return res.json({ result: response.data });
       }
+
+      // const contentType = response.headers['content-type'];
+      // if (contentType && String(contentType).includes("application/json")) {
+      //   return res.json(response.data);
+      // } else {
+      //   if (typeof response.data === 'object' && response.data !== null) {
+      //     return res.json(response.data);
+      //   }
+      //   return res.json({ result: response.data });
+      // }
     } catch (error: any) {
       console.error("Tradução falhou:", error);
       if (error.response) {
