@@ -161,7 +161,11 @@ export default function App() {
         throw new Error(`Erro na API (${response.status})`);
       };
 
-      showFeedback("success", `Resposta recebida : ${response}`);
+      console.log(response)
+      console.log('*********************************')
+      console.log(response.json())
+
+      await showFeedback("success", `Resposta recebida : ${response}`);
 
       const data = await response.json();
       
