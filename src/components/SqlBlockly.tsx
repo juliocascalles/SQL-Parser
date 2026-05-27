@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import * as Blockly from "blockly";
 import { parseSqlStringToData } from "../parser.ts";
+import { Columns, Database, Filter, Layers, ArrowDownAZ, GitMerge } from "lucide-react";
 
 // Define the blocks configuration JSON array
 const BLOCKS_JSON = [
@@ -814,11 +815,50 @@ export default function SqlBlockly({ onSqlChange, editorTriggerRef }: SqlBlockly
     onSqlChange(sql);
   };
 
+  const getOrCreateQueryBlock = (ws: any) => {
+    const allBlocks = ws.getTopBlocks(true);
+    let queryBlock = allBlocks.find((b: any) => b.type === "sql_query");
+    if (!queryBlock) {
+      queryBlock = ws.newBlock("sql_query");
+      queryBlock.initSvg();
+      queryBlock.render();
+      queryBlock.moveBy(40, 40);
+      ws.scrollCenter();
+    }
+    return queryBlock;
+  };
+
+  const spawnBlock = (type: string) => {
+    if (!workspaceRef.current) return;
+    const ws = workspaceRef.current;
+    try {
+      getOrCreateQueryBlock(ws);
+
+      const block = ws.newBlock(type);
+      block.initSvg();
+      block.render();
+
+      const scrollX = ws.scrollX || 0;
+      const scrollY = ws.scrollY || 0;
+      const scale = ws.scale || 1;
+      
+      const x = -scrollX / scale + 150;
+      const y = -scrollY / scale + 100 + (Math.random() * 40 - 20);
+
+      block.moveBy(x, y);
+      ws.select(block);
+      
+      onWorkspaceChange();
+    } catch (err) {
+      console.error("Erro ao criar bloco:", err);
+    }
+  };
+
   useEffect(() => {
     if (!containerRef.current) return;
 
     const workspace = Blockly.inject(containerRef.current, {
-      toolbox: TOOLBOX_XML,
+      toolbox: undefined,
       grid: {
         spacing: 20,
         length: 3,
@@ -846,54 +886,6 @@ export default function SqlBlockly({ onSqlChange, editorTriggerRef }: SqlBlockly
 
     workspace.addChangeListener(onWorkspaceChange);
 
-    const applyCategoryRowColors = () => {
-      const rows = document.querySelectorAll("#blockly-editor-container .blocklyTreeRow");
-      rows.forEach((row: any) => {
-        const labelEl = row.querySelector(".blocklyTreeLabel");
-        const categoryName = labelEl ? labelEl.textContent?.trim() : "";
-        let color = "";
-
-        if (categoryName === "Query") {
-          color = "#4f46e5";
-        } else if (categoryName === "Campos") {
-          color = "#06b6d4";
-        } else if (categoryName === "Tabelas") {
-          color = "#ec4899";
-        } else if (categoryName === "Filtros") {
-          color = "#10b981";
-        } else if (categoryName === "Grupo") {
-          color = "#f59e0b";
-        } else if (categoryName === "Ordem") {
-          color = "#8b5cf6";
-        }
-
-        if (color) {
-          row.style.setProperty("--category-color", color);
-          row.style.setProperty("background-color", color, "important");
-          row.style.setProperty("border-left-width", "0px", "important");
-        }
-      });
-    };
-
-    applyCategoryRowColors();
-    const t1 = setTimeout(applyCategoryRowColors, 50);
-    const t2 = setTimeout(applyCategoryRowColors, 200);
-    const t3 = setTimeout(applyCategoryRowColors, 1000);
-
-    const toolboxDiv = document.querySelector("#blockly-editor-container .blocklyToolboxDiv");
-    let observer: MutationObserver | null = null;
-    if (toolboxDiv) {
-      observer = new MutationObserver(() => {
-        applyCategoryRowColors();
-      });
-      observer.observe(toolboxDiv, {
-        attributes: true,
-        subtree: true,
-        childList: true,
-        attributeFilter: ["class", "style"]
-      });
-    }
-
     const resizeObserver = new ResizeObserver(() => {
       Blockly.svgResize(workspace);
     });
@@ -905,20 +897,14 @@ export default function SqlBlockly({ onSqlChange, editorTriggerRef }: SqlBlockly
       workspace.removeChangeListener(onWorkspaceChange);
       workspace.dispose();
       resizeObserver.disconnect();
-      clearTimeout(t1);
-      clearTimeout(t2);
-      clearTimeout(t3);
-      if (observer) {
-        observer.disconnect();
-      }
     };
   }, []);
 
   return (
-    <div id="blockly-editor-container" className="relative w-full h-[550px] border border-slate-200 rounded-xl overflow-hidden shadow-lg bg-white">
-      {/* Visual styling overrides for custom elegant, narrow toolbox */}
+    <div id="blockly-editor-container" className="relative w-full h-[580px] border border-slate-200 rounded-xl overflow-hidden shadow-md bg-white flex flex-col font-sans">
+      {/* Visual styling overrides for hiding the toolbox completely and setting up workspace */}
       <style>{`
-        /* Narrow compact toolbox container & categorizer div */
+        /* Hide traditional toolbox since we use footer actions */
         #blockly-editor-container .blocklyToolboxDiv,
         #blockly-editor-container .blocklyToolboxContainer,
         #blockly-editor-container .blocklyTreeRoot,
@@ -926,24 +912,10 @@ export default function SqlBlockly({ onSqlChange, editorTriggerRef }: SqlBlockly
         .blocklyToolboxDiv,
         .blocklyToolboxContainer,
         .blocklyTreeRoot {
-          width: 95px !important;
-          background-color: #050508 !important;
-          background: #050508 !important;
-          border-right: 1px solid #cbd5e1 !important;
-          box-shadow: inset -1px 0 2px rgba(0,0,0,0.05) !important;
-          padding-top: 10px !important;
-          
-          /* Prevent vertical or horizontal scroll of categories */
-          overflow-y: hidden !important;
-          overflow-x: hidden !important;
-          scrollbar-width: none !important; /* Firefox */
-        }
-        
-        #blockly-editor-container .blocklyToolboxDiv::-webkit-scrollbar,
-        #blockly-editor-container .blocklyToolboxContainer::-webkit-scrollbar,
-        .blocklyToolboxDiv::-webkit-scrollbar,
-        .blocklyToolboxContainer::-webkit-scrollbar {
-          display: none !important; /* Chrome, Edge, Safari */
+          display: none !important;
+          width: 0px !important;
+          visibility: hidden !important;
+          pointer-events: none !important;
         }
 
         /* Smaller text font and tracking tailored for high contrast */
@@ -1002,9 +974,9 @@ export default function SqlBlockly({ onSqlChange, editorTriggerRef }: SqlBlockly
           fill-opacity: 0.35 !important;
         }
 
-        /* Clean workspace background for light theme */
+        /* Clean workspace background for light theme with high contrast grid compatibility */
         .blocklySvg {
-          background-color: #000000 !important;
+          background-color: #f8fafc !important;
         }
 
         /* Hide vertical scroll handles in SVG */
@@ -1018,11 +990,119 @@ export default function SqlBlockly({ onSqlChange, editorTriggerRef }: SqlBlockly
         }
       `}</style>
 
-      <div className="absolute top-2 right-2 z-10 flex items-center gap-2 bg-white/95 text-slate-800 backdrop-blur px-3 py-1.5 rounded-lg text-xs font-mono shadow-md select-none border border-slate-200">
-        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-        Blockly Ativo
+      {/* Workspace Area */}
+      <div className="flex-1 w-full relative">
+        <div className="absolute top-2 right-2 z-10 flex items-center gap-2 bg-white/95 text-slate-805 backdrop-blur px-3 py-1.5 rounded-lg text-xs font-mono shadow-md select-none border border-slate-200">
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          Blockly Ativo
+        </div>
+        <div ref={containerRef} className="w-full h-full" style={{ textAlign: "left" }} />
       </div>
-      <div ref={containerRef} className="w-full h-full" style={{ textAlign: "left" }} />
+
+      {/* Visual Footer Block Builder Toolbar with organized grouped buttons */}
+      <div className="bg-slate-50 border-t border-slate-200 p-3 select-none">
+        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 px-1">
+          Gerador de Blocos (Clique para adicionar ao canvas)
+        </div>
+        <div className="flex flex-col xl:flex-row gap-2.5 items-stretch">
+          {/* Campos Group (SELECT) */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 p-2 bg-cyan-50/50 border border-cyan-100 rounded-lg flex-1">
+            <span className="text-[10px] font-bold text-cyan-700 uppercase tracking-wider px-1 shrink-0">SELECT</span>
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                id="btn-add-field"
+                onClick={() => spawnBlock("sql_select_item")}
+                className="flex items-center justify-center gap-1.5 px-2.5 py-1 bg-white hover:bg-cyan-100 text-cyan-800 border border-cyan-200 rounded-md text-xs font-semibold cursor-pointer active:scale-95 transition-all shadow-sm shrink-0"
+              >
+                <Columns size={12} className="text-cyan-500" />
+                <span>+ Campo</span>
+              </button>
+              <button
+                id="btn-add-function"
+                onClick={() => spawnBlock("sql_function_item")}
+                className="flex items-center justify-center gap-1.5 px-2.5 py-1 bg-white hover:bg-cyan-100 text-cyan-800 border border-cyan-200 rounded-md text-xs font-semibold cursor-pointer active:scale-95 transition-all shadow-sm shrink-0"
+              >
+                <span>+ Função</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Tables Group (FROM / JOIN) */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 p-2 bg-pink-50/55 border border-pink-100 rounded-lg flex-1">
+            <span className="text-[10px] font-bold text-pink-700 uppercase tracking-wider px-1 shrink-0">FROM</span>
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                id="btn-add-table"
+                onClick={() => spawnBlock("sql_table_item")}
+                className="flex items-center justify-center gap-1.5 px-2.5 py-1 bg-white hover:bg-pink-100 text-pink-800 border border-pink-200 rounded-md text-xs font-semibold cursor-pointer active:scale-95 transition-all shadow-sm shrink-0"
+              >
+                <Database size={12} className="text-pink-500" />
+                <span>+ Tabela</span>
+              </button>
+              <button
+                id="btn-add-join"
+                onClick={() => spawnBlock("sql_join_item")}
+                className="flex items-center justify-center gap-1.5 px-2.5 py-1 bg-white hover:bg-pink-100 text-pink-800 border border-pink-200 rounded-md text-xs font-semibold cursor-pointer active:scale-95 transition-all shadow-sm shrink-0"
+              >
+                <GitMerge size={12} className="text-pink-500" />
+                <span>+ JOIN</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Filters Group (WHERE) */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 p-2 bg-emerald-50/50 border border-emerald-100 rounded-lg flex-1">
+            <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider px-1 shrink-0">WHERE</span>
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                id="btn-add-where"
+                onClick={() => spawnBlock("sql_where_compare")}
+                className="flex items-center justify-center gap-1.5 px-2.5 py-1 bg-white hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-md text-xs font-semibold cursor-pointer active:scale-95 transition-all shadow-sm shrink-0"
+              >
+                <Filter size={12} className="text-emerald-500" />
+                <span>+ Filtro</span>
+              </button>
+              <button
+                id="btn-add-and"
+                onClick={() => spawnBlock("sql_where_and")}
+                className="flex items-center justify-center gap-1 px-2 py-1 bg-white hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-md text-xs font-semibold cursor-pointer active:scale-95 transition-all shadow-sm shrink-0"
+              >
+                <span>+ E (AND)</span>
+              </button>
+              <button
+                id="btn-add-or"
+                onClick={() => spawnBlock("sql_where_or")}
+                className="flex items-center justify-center gap-1 px-2 py-1 bg-white hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-md text-xs font-semibold cursor-pointer active:scale-95 transition-all shadow-sm shrink-0"
+              >
+                <span>+ OU (OR)</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Analytical (GROUP BY / ORDER BY) */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 p-2 bg-amber-50/55 border border-amber-100 rounded-lg flex-1">
+            <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider px-1 shrink-0">ANÁLISE</span>
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                id="btn-add-groupby"
+                onClick={() => spawnBlock("sql_group_by_item")}
+                className="flex items-center justify-center gap-1.5 px-2.5 py-1 bg-white hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-md text-xs font-semibold cursor-pointer active:scale-95 transition-all shadow-sm shrink-0"
+              >
+                <Layers size={12} className="text-amber-500" />
+                <span>+ GROUP BY</span>
+              </button>
+              <button
+                id="btn-add-orderby"
+                onClick={() => spawnBlock("sql_order_by_item")}
+                className="flex items-center justify-center gap-1.5 px-2.5 py-1 bg-white hover:bg-purple-100 text-purple-850 border border-purple-200 rounded-md text-xs font-semibold cursor-pointer active:scale-95 transition-all shadow-sm shrink-0"
+              >
+                <ArrowDownAZ size={12} className="text-purple-500" />
+                <span>+ ORDER BY</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

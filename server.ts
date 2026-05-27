@@ -36,17 +36,14 @@ async function startServer() {
 
       const URL_API = 'https://fix-sql.onrender.com/translate'
 
-      const queryParams = new URLSearchParams({text: text, language: language});
-
       const response = await fetch(
-        `${URL_API}?${queryParams.toString()}`, {
+        `${URL_API}?text=${text}&language=${language}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            // body: JSON.stringify({text: text, language: language}),
             mode: 'cors', // Garante o suporte a Cross-Origin
-            credentials: 'omit' // Ou 'same-origin' / 'include'
+            credentials: 'same-origin'
       });
 
       if (!response.ok) {
