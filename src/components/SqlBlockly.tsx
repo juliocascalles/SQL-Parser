@@ -31,7 +31,7 @@ const BLOCKS_JSON = [
       { "type": "field_input", "name": "LIMIT", "text": "" }
     ],
     "inputsInline": false,
-    "colour": 210,
+    "colour": "#4f46e5",
     "tooltip": "Query SQL principal estruturada",
     "helpUrl": ""
   },
@@ -43,7 +43,7 @@ const BLOCKS_JSON = [
       { "type": "input_value", "name": "NEXT", "check": "SelectItem" }
     ],
     "output": "SelectItem",
-    "colour": 160,
+    "colour": "#06b6d4",
     "tooltip": "Um campo/coluna selecionado na consulta",
     "helpUrl": ""
   },
@@ -69,7 +69,7 @@ const BLOCKS_JSON = [
       { "type": "input_value", "name": "NEXT", "check": "SelectItem" }
     ],
     "output": "SelectItem",
-    "colour": 160,
+    "colour": "#06b6d4",
     "tooltip": "Uma função SQL no SELECT (ex: COUNT(*))",
     "helpUrl": ""
   },
@@ -81,7 +81,7 @@ const BLOCKS_JSON = [
       { "type": "input_value", "name": "NEXT", "check": "TableOrJoin" }
     ],
     "output": "TableOrJoin",
-    "colour": 330,
+    "colour": "#ec4899",
     "tooltip": "Uma tabela na cláusula FROM",
     "helpUrl": ""
   },
@@ -106,7 +106,7 @@ const BLOCKS_JSON = [
       { "type": "input_value", "name": "NEXT", "check": "TableOrJoin" }
     ],
     "output": "TableOrJoin",
-    "colour": 330,
+    "colour": "#ec4899",
     "tooltip": "Junção (JOIN) com condição de conexão",
     "helpUrl": ""
   },
@@ -118,7 +118,7 @@ const BLOCKS_JSON = [
       { "type": "input_value", "name": "NEXT", "check": "GroupByItem" }
     ],
     "output": "GroupByItem",
-    "colour": 45,
+    "colour": "#f59e0b",
     "tooltip": "Coluna para agrupamento (GROUP BY)",
     "helpUrl": ""
   },
@@ -138,7 +138,7 @@ const BLOCKS_JSON = [
       { "type": "input_value", "name": "NEXT", "check": "OrderItem" }
     ],
     "output": "OrderItem",
-    "colour": 280,
+    "colour": "#8b5cf6",
     "tooltip": "Coluna e direção de ordenação (ORDER BY)",
     "helpUrl": ""
   },
@@ -164,7 +164,7 @@ const BLOCKS_JSON = [
       { "type": "field_input", "name": "VALUE", "text": "18" }
     ],
     "output": "Condition",
-    "colour": 125,
+    "colour": "#10b981",
     "tooltip": "Compara um campo com um valor",
     "helpUrl": ""
   },
@@ -176,7 +176,7 @@ const BLOCKS_JSON = [
       { "type": "input_value", "name": "RIGHT", "check": "Condition" }
     ],
     "output": "Condition",
-    "colour": 125,
+    "colour": "#10b981",
     "tooltip": "Combina duas condições com operador lógico AND",
     "helpUrl": ""
   },
@@ -188,7 +188,7 @@ const BLOCKS_JSON = [
       { "type": "input_value", "name": "RIGHT", "check": "Condition" }
     ],
     "output": "Condition",
-    "colour": 125,
+    "colour": "#10b981",
     "tooltip": "Combina duas condições com operador lógico OR",
     "helpUrl": ""
   }
@@ -791,8 +791,25 @@ export default function SqlBlockly({ onSqlChange, editorTriggerRef }: SqlBlockly
     };
   }, [editorTriggerRef]);
 
-  const onWorkspaceChange = () => {
+  const onWorkspaceChange = (event?: any) => {
     if (!workspaceRef.current) return;
+
+    if (event) {
+      if (event.isUiEvent) return;
+
+      // Verify if it is a block move event, and ignore coordinate drags that do not couple/decouple
+      if (event.type === "move" || event.type === "BLOCK_MOVE") {
+        const oldParent = event.oldParentId;
+        const newParent = event.newParentId;
+        const oldInput = event.oldInputName;
+        const newInput = event.newInputName;
+
+        if (oldParent === newParent && oldInput === newInput) {
+          return;
+        }
+      }
+    }
+
     const sql = workspaceToSql(workspaceRef.current);
     onSqlChange(sql);
   };
@@ -805,7 +822,7 @@ export default function SqlBlockly({ onSqlChange, editorTriggerRef }: SqlBlockly
       grid: {
         spacing: 20,
         length: 3,
-        colour: "#f1f5f9",
+        colour: "#e2e8f0",
         snap: true,
       },
       zoom: {
@@ -817,7 +834,10 @@ export default function SqlBlockly({ onSqlChange, editorTriggerRef }: SqlBlockly
         scaleSpeed: 1.2,
       },
       trashcan: true,
-      scrollbars: false,
+      scrollbars: {
+        horizontal: true,
+        vertical: false,
+      },
     });
 
     workspaceRef.current = workspace;
@@ -825,6 +845,54 @@ export default function SqlBlockly({ onSqlChange, editorTriggerRef }: SqlBlockly
     onWorkspaceChange();
 
     workspace.addChangeListener(onWorkspaceChange);
+
+    const applyCategoryRowColors = () => {
+      const rows = document.querySelectorAll("#blockly-editor-container .blocklyTreeRow");
+      rows.forEach((row: any) => {
+        const labelEl = row.querySelector(".blocklyTreeLabel");
+        const categoryName = labelEl ? labelEl.textContent?.trim() : "";
+        let color = "";
+
+        if (categoryName === "Query") {
+          color = "#4f46e5";
+        } else if (categoryName === "Campos") {
+          color = "#06b6d4";
+        } else if (categoryName === "Tabelas") {
+          color = "#ec4899";
+        } else if (categoryName === "Filtros") {
+          color = "#10b981";
+        } else if (categoryName === "Grupo") {
+          color = "#f59e0b";
+        } else if (categoryName === "Ordem") {
+          color = "#8b5cf6";
+        }
+
+        if (color) {
+          row.style.setProperty("--category-color", color);
+          row.style.setProperty("background-color", color, "important");
+          row.style.setProperty("border-left-width", "0px", "important");
+        }
+      });
+    };
+
+    applyCategoryRowColors();
+    const t1 = setTimeout(applyCategoryRowColors, 50);
+    const t2 = setTimeout(applyCategoryRowColors, 200);
+    const t3 = setTimeout(applyCategoryRowColors, 1000);
+
+    const toolboxDiv = document.querySelector("#blockly-editor-container .blocklyToolboxDiv");
+    let observer: MutationObserver | null = null;
+    if (toolboxDiv) {
+      observer = new MutationObserver(() => {
+        applyCategoryRowColors();
+      });
+      observer.observe(toolboxDiv, {
+        attributes: true,
+        subtree: true,
+        childList: true,
+        attributeFilter: ["class", "style"]
+      });
+    }
 
     const resizeObserver = new ResizeObserver(() => {
       Blockly.svgResize(workspace);
@@ -837,37 +905,65 @@ export default function SqlBlockly({ onSqlChange, editorTriggerRef }: SqlBlockly
       workspace.removeChangeListener(onWorkspaceChange);
       workspace.dispose();
       resizeObserver.disconnect();
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+      if (observer) {
+        observer.disconnect();
+      }
     };
   }, []);
 
   return (
-    <div id="blockly-editor-container" className="relative w-full h-[550px] border border-zinc-200 rounded-xl overflow-hidden shadow-sm bg-white">
+    <div id="blockly-editor-container" className="relative w-full h-[550px] border border-slate-200 rounded-xl overflow-hidden shadow-lg bg-white">
       {/* Visual styling overrides for custom elegant, narrow toolbox */}
       <style>{`
-        /* Narrow compact toolbox container */
-        .blocklyToolboxDiv {
+        /* Narrow compact toolbox container & categorizer div */
+        #blockly-editor-container .blocklyToolboxDiv,
+        #blockly-editor-container .blocklyToolboxContainer,
+        #blockly-editor-container .blocklyTreeRoot,
+        #blockly-editor-container .blocklyTreeRootContainer,
+        .blocklyToolboxDiv,
+        .blocklyToolboxContainer,
+        .blocklyTreeRoot {
           width: 95px !important;
-          background-color: #f8fafc !important;
-          border-right: 1px solid #e2e8f0 !important;
-          box-shadow: inset -1px 0 3px rgba(0,0,0,0.01) !important;
+          background-color: #050508 !important;
+          background: #050508 !important;
+          border-right: 1px solid #cbd5e1 !important;
+          box-shadow: inset -1px 0 2px rgba(0,0,0,0.05) !important;
           padding-top: 10px !important;
+          
+          /* Prevent vertical or horizontal scroll of categories */
+          overflow-y: hidden !important;
+          overflow-x: hidden !important;
+          scrollbar-width: none !important; /* Firefox */
+        }
+        
+        #blockly-editor-container .blocklyToolboxDiv::-webkit-scrollbar,
+        #blockly-editor-container .blocklyToolboxContainer::-webkit-scrollbar,
+        .blocklyToolboxDiv::-webkit-scrollbar,
+        .blocklyToolboxContainer::-webkit-scrollbar {
+          display: none !important; /* Chrome, Edge, Safari */
         }
 
-        /* Smaller text font and tracking */
+        /* Smaller text font and tracking tailored for high contrast */
         .blocklyTreeLabel {
-          font-family: ui-sans-serif, system-ui, sans-serif !important;
-          font-size: 11.5px !important;
-          font-weight: 600 !important;
-          color: #475569 !important;
+          font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif !important;
+          font-size: 11px !important;
+          font-weight: 700 !important;
+          text-color: #000000 !important;
+          font-color: #000000 !important;
+          color: #000000 !important;
           text-transform: uppercase !important;
           letter-spacing: 0.05em !important;
           padding-left: 0px !important;
+          text-shadow: 0 1px 2px rgba(0,0,0,0.4) !important;
         }
 
         /* Compact folder category row item spacing */
         .blocklyTreeRow {
           height: 30px !important;
-          margin: 3px 6px !important;
+          margin: 4px 6px !important;
           padding: 2px 4px !important;
           border-radius: 6px !important;
           border: 1px solid transparent !important;
@@ -880,17 +976,19 @@ export default function SqlBlockly({ onSqlChange, editorTriggerRef }: SqlBlockly
         }
 
         .blocklyTreeRow:hover {
-          background-color: #f1f5f9 !important;
-          border-color: #e2e8f0 !important;
+          opacity: 0.9 !important;
+          filter: brightness(0.95) !important;
+          border-color: rgba(0, 0, 0, 0.15) !important;
         }
 
         .blocklyTreeSelected {
-          background-color: #e2e8f0 !important;
-          border-color: #cbd5e1 !important;
+          border-color: #0f172a !important;
+          box-shadow: 0 0 12px rgba(0,0,0,0.15), inset 0 0 0 1px #0f172a !important;
         }
 
         .blocklyTreeSelected .blocklyTreeLabel {
-          color: #0f172a !important;
+          color: #000000 !important;
+          font-weight: 850 !important;
         }
 
         /* Totally hide default folder expand/collapse icons */
@@ -898,13 +996,29 @@ export default function SqlBlockly({ onSqlChange, editorTriggerRef }: SqlBlockly
           display: none !important;
         }
 
-        /* Ambient styling for grid background */
+        /* Fresh light themed sliding drawer (Flyout Background) */
+        .blocklyFlyoutBackground {
+          fill: #f1f5f9 !important;
+          fill-opacity: 0.35 !important;
+        }
+
+        /* Clean workspace background for light theme */
         .blocklySvg {
-          background-color: #fafafa !important;
+          background-color: #000000 !important;
+        }
+
+        /* Hide vertical scroll handles in SVG */
+        .blocklyScrollbarVertical,
+        .blocklyScrollbarVertical .blocklyScrollbarHandle,
+        .blocklyScrollbarVertical .blocklyScrollbarBackground {
+          display: none !important;
+          opacity: 0 !important;
+          pointer-events: none !important;
+          visibility: hidden !important;
         }
       `}</style>
 
-      <div className="absolute top-2 right-2 z-10 flex items-center gap-2 bg-zinc-900/95 text-white/95 backdrop-blur px-3 py-1.5 rounded-lg text-xs font-mono shadow-md select-none border border-zinc-800">
+      <div className="absolute top-2 right-2 z-10 flex items-center gap-2 bg-white/95 text-slate-800 backdrop-blur px-3 py-1.5 rounded-lg text-xs font-mono shadow-md select-none border border-slate-200">
         <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
         Blockly Ativo
       </div>

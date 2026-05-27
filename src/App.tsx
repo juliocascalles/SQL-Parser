@@ -216,7 +216,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans antialiased pb-12 selection:bg-indigo-100">
+    <div className="min-h-screen bg-[#07090e] text-slate-200 font-sans antialiased pb-12 selection:bg-cyan-500/20">
       
       {/* Dynamic Alert Banner */}
       <AnimatePresence>
@@ -227,14 +227,14 @@ export default function App() {
             exit={{ opacity: 0, y: -50 }}
             className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 rounded-xl shadow-lg border text-sm max-w-md backdrop-blur-md ${
               statusMessage.type === "success"
-                ? "bg-emerald-50/95 border-emerald-200 text-emerald-800"
-                : "bg-rose-50/95 border-rose-200 text-rose-800"
+                ? "bg-slate-900/95 border-emerald-500/30 text-emerald-350 shadow-emerald-500/10"
+                : "bg-slate-900/95 border-rose-500/30 text-rose-350 shadow-rose-500/10"
             }`}
           >
             {statusMessage.type === "success" ? (
-              <Check className="w-5 h-5 text-emerald-500 shrink-0" />
+              <Check className="w-5 h-5 text-emerald-450 shrink-0" />
             ) : (
-              <AlertCircle className="w-5 h-5 text-rose-500 shrink-0" />
+              <AlertCircle className="w-5 h-5 text-rose-450 shrink-0" />
             )}
             <p className="font-medium">{statusMessage.text}</p>
           </motion.div>
@@ -242,48 +242,48 @@ export default function App() {
       </AnimatePresence>
 
       {/* Main Header */}
-      <header className="border-b border-slate-200 bg-white shadow-sm/50 sticky top-0 z-20 backdrop-blur-md bg-white/90">
+      <header className="border-b border-slate-900 bg-[#080c14]/80 shadow-md sticky top-0 z-20 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-100">
-              <Database className="w-5 h-5" />
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-indigo-600 flex items-center justify-center text-slate-950 shadow-lg shadow-cyan-500/15">
+              <Database className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold tracking-tight text-slate-950 flex items-center gap-2">
+              <h1 className="text-xl font-display font-bold tracking-tight text-white flex items-center gap-2">
                 SQL-Parser
-                <span className="text-[10px] uppercase font-mono tracking-widest px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-bold border border-indigo-200">
+                <span className="text-[10px] uppercase font-mono tracking-widest px-1.5 py-0.5 rounded bg-cyan-950/60 text-cyan-400 font-bold border border-cyan-800">
                   v1.5
                 </span>
               </h1>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-slate-400">
                 Monte queries SQL visualmente e traduza para linguagens NoSQL e DataFrames
               </p>
             </div>
           </div>
 
           {/* Quick Examples Loader */}
-          <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-lg border border-slate-200">
-            <span className="text-[10px] font-semibold text-slate-500 px-2 uppercase tracking-wider">
+          <div className="flex items-center gap-2 bg-slate-950/80 p-1 rounded-xl border border-slate-850">
+            <span className="text-[10px] font-semibold text-slate-400 px-2 uppercase tracking-wider">
               Exemplos:
             </span>
             <button
               id="example-btn-customers"
               onClick={() => loadExample("customers")}
-              className="px-2.5 py-1 text-xs font-medium text-slate-600 hover:text-indigo-600 rounded bg-white hover:shadow-xs border border-transparent hover:border-slate-300 transition-all cursor-pointer"
+              className="px-2.5 py-1 text-xs font-semibold text-slate-300 hover:text-cyan-400 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 transition-all cursor-pointer"
             >
               Clientes
             </button>
             <button
               id="example-btn-sales"
               onClick={() => loadExample("sales")}
-              className="px-2.5 py-1 text-xs font-medium text-slate-600 hover:text-indigo-600 rounded bg-white hover:shadow-xs border border-transparent hover:border-slate-300 transition-all cursor-pointer"
+              className="px-2.5 py-1 text-xs font-semibold text-slate-300 hover:text-cyan-400 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 transition-all cursor-pointer"
             >
               Vendas
             </button>
             <button
               id="example-btn-complex"
               onClick={() => loadExample("complex")}
-              className="px-2.5 py-1 text-xs font-medium text-slate-600 hover:text-indigo-600 rounded bg-white hover:shadow-xs border border-transparent hover:border-slate-300 transition-all cursor-pointer"
+              className="px-2.5 py-1 text-xs font-semibold text-slate-300 hover:text-cyan-400 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 transition-all cursor-pointer"
             >
               Filtro Tech
             </button>
@@ -299,16 +299,16 @@ export default function App() {
           
           {/* COLUMN 1: Visual Blockly Editor (7 cols) */}
           <section className="lg:col-span-7 flex flex-col gap-4">
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-4">
+            <div className="bg-slate-900/40 p-5 rounded-2xl border border-slate-800/80 shadow-2xl backdrop-blur-sm flex flex-col gap-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-indigo-500"></div>
-                  <h2 className="text-sm font-semibold tracking-tight text-slate-900 uppercase">
+                  <div className="w-2 h-2 rounded-full bg-cyan-500 shadow-lg shadow-cyan-500/50"></div>
+                  <h2 className="text-xs font-bold tracking-wider font-display text-white uppercase">
                     1. Editor Visual (Blockly)
                   </h2>
                 </div>
-                <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                  <HelpCircle className="w-3.5 h-3.5" />
+                <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                  <HelpCircle className="w-3.5 h-3.5 text-slate-500" />
                   <span>Arraste blocos para montar a query</span>
                 </div>
               </div>
@@ -325,15 +325,15 @@ export default function App() {
           <section className="lg:col-span-5 flex flex-col gap-6">
             
             {/* Box 1: SQL Code Input and Actions */}
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-4">
+            <div className="bg-slate-900/40 p-5 rounded-2xl border border-slate-800/80 shadow-2xl backdrop-blur-sm flex flex-col gap-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-amber-500"></div>
-                  <h2 className="text-sm font-semibold tracking-tight text-slate-900 uppercase">
+                  <div className="w-2 h-2 rounded-full bg-amber-400 shadow-lg shadow-amber-400/50"></div>
+                  <h2 className="text-xs font-bold tracking-wider font-display text-white uppercase">
                     2. Query SQL (Editor Manual)
                   </h2>
                 </div>
-                <span className="text-[10px] font-mono font-semibold bg-amber-50 text-amber-700 px-2 py-0.5 rounded border border-amber-200">
+                <span className="text-[10px] font-mono font-bold bg-amber-955/55 text-amber-300 px-2.5 py-0.5 rounded-lg border border-amber-900/60">
                   ANSI SQL
                 </span>
               </div>
@@ -344,12 +344,12 @@ export default function App() {
                   value={sqlQuery}
                   onChange={(e) => setSqlQuery(e.target.value)}
                   placeholder="SELECT * FROM table_name WHERE condition..."
-                  className="w-full h-[180px] p-4 bg-slate-900 text-slate-100 font-mono text-sm leading-relaxed rounded-xl border border-slate-800 shadow-inner focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                  className="w-full h-[180px] p-4 bg-slate-950 text-emerald-400 font-mono text-sm leading-relaxed rounded-xl border border-slate-850 shadow-inner focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500/40 transition-colors"
                   spellCheck="false"
                 />
                 
                 {/* Micro instructions overlay */}
-                <div className="absolute bottom-3 right-3 text-[10px] font-mono text-slate-400 bg-slate-900/90 px-2 py-1 rounded">
+                <div className="absolute bottom-3 right-3 text-[10px] font-mono text-slate-400 bg-slate-900/90 px-2 py-1 rounded border border-slate-800">
                   Modo Manual Ativo
                 </div>
               </div>
@@ -360,10 +360,10 @@ export default function App() {
                 <button
                   id="update-blockly-btn"
                   onClick={handleUpdateBlockly}
-                  className="w-full py-3 px-4 bg-slate-100 text-slate-700 hover:bg-slate-200 active:bg-slate-300 font-medium rounded-xl text-xs flex items-center justify-center gap-2 transition-all border border-slate-200 font-semibold cursor-pointer select-none"
+                  className="w-full py-3 px-4 bg-slate-950 text-slate-350 hover:bg-slate-900 active:bg-slate-850 hover:text-white font-semibold rounded-xl text-xs flex items-center justify-center gap-2 transition-all border border-slate-850 hover:border-slate-700 cursor-pointer select-none"
                   title="Atualiza os blocos visuais para corresponder ao código escrito acima"
                 >
-                  <RefreshCw className="w-4 h-4 text-slate-500" />
+                  <RefreshCw className="w-4 h-4 text-slate-400" />
                   Atualizar Blocos
                 </button>
 
@@ -372,10 +372,10 @@ export default function App() {
                   id="translate-btn"
                   onClick={handleTranslateQuery}
                   disabled={isLoading}
-                  className={`w-full py-3 px-4 text-white font-medium rounded-xl text-xs flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer select-none ${
+                  className={`w-full py-3 px-4 text-slate-950 font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition-all shadow-lg shadow-cyan-950/25 cursor-pointer select-none ${
                     isLoading
-                      ? "bg-indigo-400 cursor-not-allowed"
-                      : "bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 shadow-indigo-100"
+                      ? "bg-cyan-950 text-cyan-700 cursor-not-allowed border border-cyan-900"
+                      : "bg-gradient-to-r from-cyan-400 to-indigo-500 hover:from-cyan-350 hover:to-indigo-400"
                   }`}
                 >
                   {isLoading ? (
@@ -389,9 +389,9 @@ export default function App() {
             </div>
 
             {/* Box 2: Target Database / Language Selector */}
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-3">
+            <div className="bg-slate-900/40 p-5 rounded-2xl border border-slate-800/80 shadow-2xl backdrop-blur-sm flex flex-col gap-3">
               <div className="flex items-center justify-between">
-                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                <h3 className="text-[10px] font-extrabold text-slate-450 uppercase tracking-widest font-display">
                   Escolha o Alvo para Tradução:
                 </h3>
               </div>
@@ -406,12 +406,12 @@ export default function App() {
                       onClick={() => setTargetLanguage(lang.id)}
                       className={`flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
                         isSelected
-                          ? `bg-indigo-50 border-indigo-300 shadow-sm`
-                          : "border-slate-200 hover:bg-slate-50"
+                          ? `bg-cyan-950/40 border-cyan-500/80 shadow-lg shadow-cyan-950/40`
+                          : "border-slate-850/80 bg-slate-950/30 hover:bg-slate-850/50 text-slate-400 hover:border-slate-750 hover:text-slate-200"
                       }`}
                     >
                       <span className="text-lg mb-1">{lang.icon}</span>
-                      <span className={`text-[10px] font-bold tracking-tight ${isSelected ? "text-indigo-600" : "text-slate-600"}`}>
+                      <span className={`text-[10px] font-bold tracking-tight ${isSelected ? "text-cyan-400" : "text-slate-400"}`}>
                         {lang.id}
                       </span>
                     </button>
@@ -421,11 +421,11 @@ export default function App() {
             </div>
 
             {/* Box 3: Translation Results Section */}
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-4">
+            <div className="bg-slate-900/40 p-5 rounded-2xl border border-slate-800/80 shadow-2xl backdrop-blur-sm flex flex-col gap-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Terminal className="w-4 h-4 text-slate-500" />
-                  <span className="text-xs font-bold text-slate-700 uppercase tracking-widest">
+                  <Terminal className="w-4 h-4 text-cyan-400" />
+                  <span className="text-[10px] font-extrabold text-slate-450 uppercase tracking-widest font-display">
                     Resultado da Tradução
                   </span>
                 </div>
@@ -434,11 +434,11 @@ export default function App() {
                   <button
                     id="copy-result-btn"
                     onClick={handleCopyToClipboard}
-                    className="p-1 px-2.5 rounded hover:bg-slate-100 text-xs font-semibold text-indigo-600 flex items-center gap-1.5 cursor-pointer border border-slate-200 transition-all shadow-xs"
+                    className="p-1 px-2.5 rounded-lg hover:bg-slate-800 hover:border-slate-700 bg-slate-950/80 text-xs font-bold text-cyan-400 flex items-center gap-1.5 cursor-pointer border border-slate-850 transition-all shadow-md"
                   >
                     {isCopied ? (
                       <>
-                        <Check className="w-3.5 h-3.5 text-emerald-500" />
+                        <Check className="w-3.5 h-3.5 text-emerald-400" />
                         Copiado!
                       </>
                     ) : (
@@ -451,19 +451,19 @@ export default function App() {
                 )}
               </div>
 
-              <div className="min-h-[140px] bg-zinc-950 p-4 rounded-xl border border-zinc-900 font-mono text-xs flex flex-col justify-between overflow-x-auto">
-                <code id="translation-output-code" className="text-lime-400 whitespace-pre leading-relaxed block text-[13px]">
+              <div className="min-h-[140px] bg-[#04060a] p-4 rounded-xl border border-slate-850 font-mono text-xs flex flex-col justify-between overflow-x-auto">
+                <code id="translation-output-code" className="text-cyan-400 whitespace-pre leading-relaxed block text-[13px]">
                   {translationResult || (
-                    <span className="text-zinc-500 italic block py-4 text-center">
+                    <span className="text-slate-500 italic block py-4 text-center">
                       Nenhuma tradução solicitada ainda. Escolha a linguagem alvo acima e clique em 'Traduzir Query'.
                     </span>
                   )}
                 </code>
 
                 {translationResult && (
-                  <div className="mt-4 pt-3 border-t border-zinc-900 flex justify-between items-center text-[10px]">
-                    <span className="text-zinc-500">Sintaxe otimizada para:</span>
-                    <span className="text-lime-300 font-bold uppercase">{targetLanguage}</span>
+                  <div className="mt-4 pt-3 border-t border-slate-850 flex justify-between items-center text-[10px]">
+                    <span className="text-slate-500">Sintaxe otimizada para:</span>
+                    <span className="text-cyan-400 font-bold uppercase tracking-wider">{targetLanguage}</span>
                   </div>
                 )}
               </div>
@@ -474,33 +474,33 @@ export default function App() {
         </div>
 
         {/* Informative Help Guide Section */}
-        <section className="mt-12 bg-white rounded-2xl border border-slate-200 p-6 shadow-xs max-w-7xl mx-auto">
+        <section className="mt-12 bg-slate-900/40 rounded-2xl border border-slate-800 p-6 shadow-2xl backdrop-blur-sm max-w-7xl mx-auto">
           <div className="flex items-start gap-4">
-            <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl shrink-0">
+            <div className="p-3 bg-cyan-950/70 border border-cyan-900 text-cyan-400 rounded-xl shrink-0 shadow-lg shadow-cyan-950/10">
               <Code className="w-6 h-6" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-slate-900">Como usar o SQL-Parser?</h3>
-              <p className="text-slate-600 text-sm mt-1 leading-relaxed">
+              <h3 className="text-lg font-display font-medium text-white">Como usar o SQL-Parser?</h3>
+              <p className="text-slate-400 text-sm mt-1 leading-relaxed">
                 Esta aplicação integra uma montagem visual baseada no biblioteca <strong>Blockly</strong> com a flexibilidade de digitação textual tradicional SQL.
               </p>
               
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4 pt-4 border-t border-slate-100">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4 pt-4 border-t border-slate-850">
                 <div className="flex flex-col gap-1">
-                  <span className="text-xs font-extrabold text-indigo-600 uppercase">A – Montar por Blocos</span>
-                  <p className="text-xs text-slate-500 leading-relaxed">
+                  <span className="text-xs font-extrabold text-cyan-400 uppercase tracking-widest font-display">A – Montar por Blocos</span>
+                  <p className="text-xs text-slate-450 leading-relaxed">
                     Arraste ou preencha dados nos blocos Blockly. A área de texto "Query SQL" se altera em tempo real conforme você faz qualquer modificação visual.
                   </p>
                 </div>
                 <div className="flex flex-col gap-1">
-                  <span className="text-xs font-extrabold text-amber-600 uppercase">B – Atualizar Manualmente</span>
-                  <p className="text-xs text-slate-500 leading-relaxed">
+                  <span className="text-xs font-extrabold text-amber-400 uppercase tracking-widest font-display">B – Atualizar Manualmente</span>
+                  <p className="text-xs text-slate-450 leading-relaxed">
                     Se preferir digitar/colar SQL na caixa de texto, clique em <strong>"Atualizar Blocos"</strong> para recriar e re-conectar a árvore de blocos Blockly correspondente.
                   </p>
                 </div>
                 <div className="flex flex-col gap-1">
-                  <span className="text-xs font-extrabold text-emerald-600 uppercase">C – Traduzir Sintaxe</span>
-                  <p className="text-xs text-slate-500 leading-relaxed">
+                  <span className="text-xs font-extrabold text-emerald-400 uppercase tracking-widest font-display">C – Traduzir Sintaxe</span>
+                  <p className="text-xs text-slate-450 leading-relaxed">
                     Selecione a linguagem desejada (MongoDB, Pandas, Oracle, SQL Server ou PostgreSQL) e clique em <strong>Traduzir Query</strong> para consultar e ver o código traduzido na hora.
                   </p>
                 </div>

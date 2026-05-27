@@ -29,9 +29,24 @@ async function startServer() {
 
       console.log(`Translating SQL SQL-Parser to: ${language}`);
 
+      // const response = await fetch(
+      //   `https://fix-sql.onrender.com/translate?text=${text}&language=${language}`, {
+      //        method: "POST"
+      // });
+
+      const URL_API = 'https://fix-sql.onrender.com/translate'
+
+      const queryParams = new URLSearchParams({text: text, language: language});
+
       const response = await fetch(
-        `https://fix-sql.onrender.com/translate?text=${text}&language=${language}`, {
-             method: "POST"
+        `${URL_API}?${queryParams.toString()}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            // body: JSON.stringify({text: text, language: language}),
+            mode: 'cors', // Garante o suporte a Cross-Origin
+            credentials: 'omit' // Ou 'same-origin' / 'include'
       });
 
       if (!response.ok) {
