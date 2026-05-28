@@ -2,7 +2,7 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import cors from "cors";
-import axios from "axios";
+import { translateSql } from "./src/translate";
 
 async function startServer() {
   const app = express();
@@ -28,44 +28,17 @@ async function startServer() {
         return res.status(400).json({ error: "Parâmetros 'text' e 'language' são obrigatórios." });
       }
 
-      console.log(`Translating SQL with axios to: ${language}`);
+      console.log(`Translating SQL locally to: ${language}`);
 
-      const URL_API = 'https://fix-sql.onrender.com/translate';
+      const result = translateSql(text, language);
 
-      const response = await axios.post(
-        URL_API,
-        null,
-        {
-          params: { text: text, language: language },
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      const status_code = await response.status
-
-      if (status_code === 200) {
-        const data = await response.data
-        return res.status(200).json({
-          result: data.result
-        });
-      }
-
-      return res.status(response.status || 400).json({
-        error: "Erro na API externa de tradução",
-        detail: response.data.detail || "Descrição do erro não fornecida pela API."
+      return res.status(200).json({
+        result: result
       });
     } catch (error: any) {
       console.error("Tradução falhou:", error);
-      if (error.response) {
-        return res.status(error.response.status || 400).json({
-          error: "Erro na API externa de tradução",
-          detail: error.response.data?.detail || error.response.data || "Erro retornado pela API de tradução."
-        });
-      }
       return res.status(500).json({
-        error: "Falha na comunicação com o servidor de tradução.",
+        error: "Falha na tradução da query.",
         message: error.message,
       });
     }

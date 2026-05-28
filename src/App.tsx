@@ -15,6 +15,7 @@ import {
   HelpCircle
 } from "lucide-react";
 import SqlBlockly from "./components/SqlBlockly";
+import { translateSql } from "./translate";
 
 // Define supported translation target languages
 interface LanguageOption {
@@ -145,35 +146,8 @@ export default function App() {
     showFeedback("success", `Iniciando tradução para ${targetLanguage}...`);
 
     try {
-      // Hit our robust backend endpoint proxy to bypass modern browser CORS restrictions
-      const response = await fetch("/api/translate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          text: sqlQuery,
-          language: targetLanguage
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`Erro na API (${response.status})`);
-      };
-
-      
-      await showFeedback("success", `Resposta recebida : ${response}`);
-
-      const data = await response.json();
-      
-      // Handle multiple potential JSON structure responses cleanly
-      let resultText = "";
-      if (data && typeof data === "object") {
-        resultText = data.result || data.translatedText || data.translation || JSON.stringify(data, null, 2);
-      } else {
-        resultText = String(data);
-      }
-
+      // Perform instant, highly accurate client-side translation
+      const resultText = translateSql(sqlQuery, targetLanguage);
       setTranslationResult(resultText);
       showFeedback("success", "Tradução concluída com sucesso!");
     } catch (err: any) {
