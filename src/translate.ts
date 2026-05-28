@@ -23,6 +23,40 @@ export function cleanFieldName(field: string): string {
   return parts[parts.length - 1].trim();
 }
 
+// Extract table name from table reference like 'Cliente c' or 'Cliente AS c'
+export function extractTableName(tableStr: string): string {
+  let clean = tableStr.trim();
+  // Look for " AS " case insensitive
+  const asRegex = /\s+AS\s+/i;
+  if (asRegex.test(clean)) {
+    const parts = clean.split(asRegex);
+    return parts[0].trim().replace(/[\[\]`"]/g, "");
+  }
+  
+  // Otherwise split by whitespace
+  const parts = clean.split(/\s+/);
+  if (parts.length > 1) {
+    return parts[0].trim().replace(/[\[\]`"]/g, "");
+  }
+  
+  return clean.replace(/[\[\]`"]/g, "");
+}
+
+// Extract the alias of a table reference (if exists)
+export function getTableAlias(tableStr: string): string {
+  const clean = tableStr.trim();
+  const asRegex = /\s+AS\s+/i;
+  if (asRegex.test(clean)) {
+    const parts = clean.split(asRegex);
+    return parts[1] ? parts[1].trim() : "";
+  }
+  const parts = clean.split(/\s+/);
+  if (parts.length > 1) {
+    return parts[1].trim();
+  }
+  return "";
+}
+
 // Convert search input string into a list of conditions and its junction type
 export function splitByJunctions(str: string): { parts: string[]; isOr: boolean } {
   let parenDepth = 0;
@@ -257,9 +291,92 @@ export function translateWhereForMongo(whereCondition: string, indent: string = 
   return `{ ${partsTranslated[0]} }`;
 }
 
-// Translation helpers for Pandas Filter Expressions
+// Translation helpers for Pandas Filter Expressions with nested AND/OR operators translation
 export function translateWhereForPandas(whereStr: string): string {
-  const { parts, isOr } = splitByJunctions(whereStr);
+  let clean = whereStr.trim();
+  if (!clean) return "";
+
+  // Helper to find top-level AND/OR outside of quotes and parens
+  let parenDepth = 0;
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+  let inBacktick = false;
+
+  let bestJunctionIndex = -1;
+  let bestJunctionType: "AND" | "OR" | null = null;
+
+  for (let i = 0; i < clean.length; i++) {
+    const char = clean[i];
+    if (char === "\\" && (inSingleQuote || inDoubleQuote || inBacktick)) {
+      i++;
+      continue;
+    }
+    if (char === "'" && !inDoubleQuote && !inBacktick) inSingleQuote = !inSingleQuote;
+    else if (char === '"' && !inSingleQuote && !inBacktick) inDoubleQuote = !inDoubleQuote;
+    else if (char === "`" && !inSingleQuote && !inDoubleQuote) inBacktick = !inBacktick;
+    else if (!inSingleQuote && !inDoubleQuote && !inBacktick) {
+      if (char === "(") parenDepth++;
+      else if (char === ")") parenDepth--;
+
+      if (parenDepth === 0) {
+        // Look for OR (lower precedence, parsed first so it is evaluated last)
+        if (clean.substring(i, i + 4).toUpperCase() === " OR " || clean.substring(i, i + 4).toUpperCase() === "\nOR ") {
+          bestJunctionIndex = i;
+          bestJunctionType = "OR";
+          break; // We found an OR, which is the lowest precedence junction. Stop searching and split here.
+        }
+        // Look for AND (higher precedence, only set if we haven't found OR yet)
+        if (bestJunctionType !== "OR") {
+          if (clean.substring(i, i + 5).toUpperCase() === " AND " || clean.substring(i, i + 5).toUpperCase() === "\nAND ") {
+            bestJunctionIndex = i;
+            bestJunctionType = "AND";
+          }
+        }
+      }
+    }
+  }
+
+  if (bestJunctionIndex !== -1 && bestJunctionType) {
+    const leftPart = clean.substring(0, bestJunctionIndex).trim();
+    const rightPart = clean.substring(bestJunctionIndex + (bestJunctionType === "OR" ? 4 : 5)).trim();
+    
+    const leftTrans = translateWhereForPandas(leftPart);
+    const rightTrans = translateWhereForPandas(rightPart);
+    
+    const pandasOp = bestJunctionType === "OR" ? " | " : " & ";
+    return `(${leftTrans})${pandasOp}(${rightTrans})`;
+  }
+
+  // If there are surrounding parentheses around the whole leaf-expression, strip them and recurse
+  if (clean.startsWith("(") && clean.endsWith(")")) {
+    let pDepth = 0;
+    let isOuterMatch = true;
+    for (let i = 0; i < clean.length - 1; i++) {
+      if (clean[i] === "(") pDepth++;
+      else if (clean[i] === ")") pDepth--;
+      if (i > 0 && pDepth === 0) {
+        isOuterMatch = false;
+        break;
+      }
+    }
+    if (isOuterMatch) {
+      return translateWhereForPandas(clean.substring(1, clean.length - 1));
+    }
+  }
+
+  const cond = parseSingleCondition(clean);
+  if (!cond) return clean;
+  
+  const field = cleanFieldName(cond.field);
+  let colExpr = `df['${field}']`;
+  if (cond.field.toUpperCase().includes("COALESCE(")) {
+    colExpr = `df['${field}'].fillna(...)`;
+  } else if (cond.field.toUpperCase().includes("TRIM(")) {
+    colExpr = `df['${field}'].str.strip()`;
+  } else if (cond.field.toUpperCase().includes("CAST(")) {
+    colExpr = `df['${field}'].astype(...)`;
+  }
+
   const operatorMap: Record<string, string> = {
     "=": "==",
     ">": ">",
@@ -269,47 +386,25 @@ export function translateWhereForPandas(whereStr: string): string {
     "!=": "!=",
     "<>": "!="
   };
-  
-  const transParts = parts
-    .map(part => {
-      const cond = parseSingleCondition(part);
-      if (!cond) return "";
-      const field = cleanFieldName(cond.field);
-      
-      // Support nested expressions conversion
-      let colExpr = `df['${field}']`;
-      if (cond.field.toUpperCase().includes("COALESCE(")) {
-        colExpr = `df['${field}'].fillna(...)`;
-      } else if (cond.field.toUpperCase().includes("TRIM(")) {
-        colExpr = `df['${field}'].str.strip()`;
-      } else if (cond.field.toUpperCase().includes("CAST(")) {
-        colExpr = `df['${field}'].astype(...)`;
-      }
-      
-      if (cond.operator === "LIKE") {
-        const like = translateLikePattern(cond.value);
-        if (like.type === "startswith") {
-          return `${colExpr}.str.startswith('${like.cleanVal}')`;
-        } else if (like.type === "endswith") {
-          return `${colExpr}.str.endswith('${like.cleanVal}')`;
-        } else if (like.type === "contains") {
-          return `${colExpr}.str.contains('${like.cleanVal}')`;
-        }
-        return `${colExpr} == '${like.cleanVal}'`;
-      } else {
-        const pOp = operatorMap[cond.operator] || "==";
-        let pVal = cleanValueQuotes(cond.value);
-        if (isNaN(Number(pVal)) || pVal === "") {
-          pVal = `'${pVal}'`;
-        }
-        return `${colExpr} ${pOp} ${pVal}`;
-      }
-    })
-    .filter(x => x !== "");
-    
-  if (transParts.length === 0) return "";
-  const junction = isOr ? " | " : " & ";
-  return transParts.map(p => `(${p})`).join(junction);
+
+  if (cond.operator === "LIKE") {
+    const like = translateLikePattern(cond.value);
+    if (like.type === "startswith") {
+      return `${colExpr}.str.startswith('${like.cleanVal}')`;
+    } else if (like.type === "endswith") {
+      return `${colExpr}.str.endswith('${like.cleanVal}')`;
+    } else if (like.type === "contains") {
+      return `${colExpr}.str.contains('${like.cleanVal}')`;
+    }
+    return `${colExpr} == '${like.cleanVal}'`;
+  } else {
+    const pOp = operatorMap[cond.operator] || "==";
+    let pVal = cleanValueQuotes(cond.value);
+    if (isNaN(Number(pVal)) || pVal === "") {
+      pVal = `'${pVal}'`;
+    }
+    return `${colExpr} ${pOp} ${pVal}`;
+  }
 }
 
 // Unified dialect helper to parse and translate Oracle, SQL Server & PostgreSQL specific queries
@@ -472,11 +567,12 @@ export function translateSql(sql: string, targetLanguage: string): string {
     let resultPandas = "import pandas as pd\n\n";
     
     // Rule 2.2 - Load CSV representation of DataFrames
-    const mainTbl = cleanFieldName(parsed.mainTable || "tabela");
+    const mainTbl = extractTableName(parsed.mainTable || "tabela");
+    const mainAlias = getTableAlias(parsed.mainTable || "tabela");
     resultPandas += `# Carregar as tabelas como DataFrames\ndf_${mainTbl} = pd.read_csv('${mainTbl}.csv')\n`;
     
     for (const join of parsed.joins) {
-      const rightTbl = cleanFieldName(join.table);
+      const rightTbl = extractTableName(join.table);
       resultPandas += `df_${rightTbl} = pd.read_csv('${rightTbl}.csv')\n`;
     }
     
@@ -485,7 +581,8 @@ export function translateSql(sql: string, targetLanguage: string): string {
     
     // Rule 2.2.1 & 2.2.2 - Merge joins setup
     for (const join of parsed.joins) {
-      const rightTbl = cleanFieldName(join.table);
+      const rightTbl = extractTableName(join.table);
+      const rightAlias = getTableAlias(join.table);
       let leftOn = "None";
       let rightOn = "None";
       const cond = parseSingleCondition(join.onCondition);
@@ -497,9 +594,12 @@ export function translateSql(sql: string, targetLanguage: string): string {
         const f1Clean = cleanFieldName(f1);
         const f2Clean = cleanFieldName(f2);
         
-        if (f1Prefix && rightTbl.startsWith(f1Prefix)) {
+        if (f1Prefix && (f1Prefix === rightAlias || f1Prefix === rightTbl)) {
           rightOn = `'${f1Clean}'`;
           leftOn = `'${f2Clean}'`;
+        } else if (f1Prefix && (f1Prefix === mainAlias || f1Prefix === currentLeft)) {
+          leftOn = `'${f1Clean}'`;
+          rightOn = `'${f2Clean}'`;
         } else {
           leftOn = `'${f1Clean}'`;
           rightOn = `'${f2Clean}'`;
@@ -561,8 +661,8 @@ export function translateSql(sql: string, targetLanguage: string): string {
     // Ordering
     if (parsed.orderByFields.length > 0) {
       const orderCols = parsed.orderByFields.map(o => `'${cleanFieldName(o.column)}'`).join(", ");
-      const ascList = parsed.orderByFields.map(o => o.direction !== "DESC" ? "True" : "False").join(", ");
-      chain += `\n    .sort_values([${orderCols}], ascending=[${ascList}])`;
+      const isAscending = parsed.orderByFields[0].direction !== "DESC" ? "True" : "False";
+      chain += `\n    .sort_values([${orderCols}], ascending=${isAscending})`;
     }
     
     if (parsed.limit) {
