@@ -17,10 +17,10 @@ export function cleanValueQuotes(val: string): string {
   return cleanValue;
 }
 
-// Remove dot prefixes from table fields (e.g., c.regiao -> regiao)
+// Remove dot prefixes and brackets/backticks/quotes from table fields (e.g., c.[regiao] -> regiao)
 export function cleanFieldName(field: string): string {
   const parts = field.split(".");
-  return parts[parts.length - 1].trim();
+  return parts[parts.length - 1].trim().replace(/[\[\]`"]/g, "");
 }
 
 // Extract table name from table reference like 'Cliente c' or 'Cliente AS c'
@@ -537,12 +537,32 @@ export function translateSql(sql: string, targetLanguage: string): string {
     } else {
       // No Group By -> Rule 1.1 / 1.2
       const isMultiline = hasWhere && (splitByJunctions(parsed.whereCondition).parts.length > 1);
+      
+      // Get fields for projection (second argument of find)
+      const projectionFields = parsed.selectFields
+        .map(f => cleanFieldName(f.split(/\s+as\s+/i)[0]))
+        .filter(f => f !== "*" && f !== "" && !f.includes("("));
+      
+      const hasProjection = projectionFields.length > 0;
+
       if (isMultiline) {
         const whereMongo = translateWhereForMongo(parsed.whereCondition, "  ");
-        resultMongo = `db.${tbl}.find(\n  ${whereMongo.split("\n").join("\n  ")}\n)`;
+        if (hasProjection) {
+          const projParts = projectionFields.map(f => `  "${f}": 1`).join(",\n");
+          const projMongo = `{\n${projParts}\n}`;
+          resultMongo = `db.${tbl}.find(\n  ${whereMongo.split("\n").join("\n  ")},\n  ${projMongo.split("\n").join("\n  ")}\n)`;
+        } else {
+          resultMongo = `db.${tbl}.find(\n  ${whereMongo.split("\n").join("\n  ")}\n)`;
+        }
       } else {
         const whereMongo = hasWhere ? translateWhereForMongo(parsed.whereCondition, "  ") : "{}";
-        resultMongo = `db.${tbl}.find(${whereMongo})`;
+        if (hasProjection) {
+          const projParts = projectionFields.map(f => `"${f}": 1`).join(", ");
+          const projMongo = `{ ${projParts} }`;
+          resultMongo = `db.${tbl}.find(${whereMongo}, ${projMongo})`;
+        } else {
+          resultMongo = `db.${tbl}.find(${whereMongo})`;
+        }
       }
     }
     
@@ -662,7 +682,7 @@ export function translateSql(sql: string, targetLanguage: string): string {
     if (parsed.orderByFields.length > 0) {
       const orderCols = parsed.orderByFields.map(o => `'${cleanFieldName(o.column)}'`).join(", ");
       const isAscending = parsed.orderByFields[0].direction !== "DESC" ? "True" : "False";
-      chain += `\n    .sort_values([${orderCols}], ascending=${isAscending})`;
+      chain += `\n    .sort_values(${orderCols}, ascending=${isAscending})`;
     }
     
     if (parsed.limit) {
