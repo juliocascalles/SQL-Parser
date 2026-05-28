@@ -38,7 +38,7 @@ const BLOCKS_JSON = [
   },
   {
     "type": "sql_select_item",
-    "message0": "campo %1 %2",
+    "message0": "%1 %2",
     "args0": [
       { "type": "field_input", "name": "FIELD_NAME", "text": "id" },
       { "type": "input_value", "name": "NEXT", "check": "SelectItem" }
@@ -50,7 +50,7 @@ const BLOCKS_JSON = [
   },
   {
     "type": "sql_function_item",
-    "message0": "função %1(%2) como %3 %4",
+    "message0": "%1(%2) AS %3 %4",
     "args0": [
       {
         "type": "field_dropdown",
@@ -76,7 +76,7 @@ const BLOCKS_JSON = [
   },
   {
     "type": "sql_table_item",
-    "message0": "tabela %1 %2",
+    "message0": "%1 %2",
     "args0": [
       { "type": "field_input", "name": "TABLE_NAME", "text": "users" },
       { "type": "input_value", "name": "NEXT", "check": "TableOrJoin" }
@@ -88,7 +88,7 @@ const BLOCKS_JSON = [
   },
   {
     "type": "sql_join_item",
-    "message0": "%1 tabela %2 ON %3 %4",
+    "message0": "%1 %2 ON %3 %4",
     "args0": [
       {
         "type": "field_dropdown",
@@ -113,7 +113,7 @@ const BLOCKS_JSON = [
   },
   {
     "type": "sql_group_by_item",
-    "message0": "grupo %1 %2",
+    "message0": "%1 %2",
     "args0": [
       { "type": "field_input", "name": "FIELD_NAME", "text": "category" },
       { "type": "input_value", "name": "NEXT", "check": "GroupByItem" }
@@ -125,7 +125,7 @@ const BLOCKS_JSON = [
   },
   {
     "type": "sql_order_by_item",
-    "message0": "coluna %1 %2 %3",
+    "message0": "%1 %2 %3",
     "args0": [
       { "type": "field_input", "name": "COLUMN", "text": "created_at" },
       {
