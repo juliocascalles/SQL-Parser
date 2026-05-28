@@ -36,16 +36,19 @@ async function startServer() {
         URL_API,
         null,
         {
-          params: { text, language },
+          params: { text: text, language: language },
           headers: {
             'Content-Type': 'application/json'
           }
         }
       );
 
-      if (response.status === 200) {
+      const status_code = await response.status
+
+      if (status_code === 200) {
+        const data = await response.data
         return res.status(200).json({
-          result: response.data.result
+          result: data.result
         });
       }
 
