@@ -57,6 +57,107 @@ export function getTableAlias(tableStr: string): string {
   return "";
 }
 
+// Strip outer parentheses protecting the entire expression
+export function stripOuterParens(str: string): string {
+  let clean = str.trim();
+  while (clean.startsWith("(") && clean.endsWith(")")) {
+    let parenDepth = 0;
+    let isOuterMatch = true;
+    for (let i = 0; i < clean.length - 1; i++) {
+      if (clean[i] === "(") parenDepth++;
+      else if (clean[i] === ")") parenDepth--;
+      if (i > 0 && parenDepth === 0) {
+        isOuterMatch = false;
+        break;
+      }
+    }
+    if (isOuterMatch) {
+      clean = clean.substring(1, clean.length - 1).trim();
+    } else {
+      break;
+    }
+  }
+  return clean;
+}
+
+// Find top-level junctions and split SQL expressions
+export function splitTopLevelJunction(str: string): { parts: string[]; type: "AND" | "OR" | null } {
+  const clean = str.trim();
+  if (!clean) return { parts: [], type: null };
+
+  let parenDepth = 0;
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+  let inBacktick = false;
+
+  const orIndices: number[] = [];
+  const andIndices: number[] = [];
+
+  for (let i = 0; i < clean.length; i++) {
+    const char = clean[i];
+    if (char === "\\" && (inSingleQuote || inDoubleQuote || inBacktick)) {
+      i++;
+      continue;
+    }
+    if (char === "'" && !inDoubleQuote && !inBacktick) inSingleQuote = !inSingleQuote;
+    else if (char === '"' && !inSingleQuote && !inBacktick) inDoubleQuote = !inDoubleQuote;
+    else if (char === "`" && !inSingleQuote && !inDoubleQuote) inBacktick = !inBacktick;
+    else if (!inSingleQuote && !inDoubleQuote && !inBacktick) {
+      if (char === "(") parenDepth++;
+      else if (char === ")") parenDepth--;
+
+      if (parenDepth === 0) {
+        // Look for OR
+        if (clean.substring(i, i + 4).toUpperCase() === " OR " || clean.substring(i, i + 4).toUpperCase() === "\nOR " || clean.substring(i, i + 4).toUpperCase() === "\r\nOR ") {
+          orIndices.push(i);
+        }
+        // Look for AND
+        else if (clean.substring(i, i + 5).toUpperCase() === " AND " || clean.substring(i, i + 5).toUpperCase() === "\nAND " || clean.substring(i, i + 5).toUpperCase() === "\r\nAND ") {
+          andIndices.push(i);
+        }
+      }
+    }
+  }
+
+  if (orIndices.length > 0) {
+    const parts: string[] = [];
+    let lastIndex = 0;
+    for (const idx of orIndices) {
+      parts.push(clean.substring(lastIndex, idx).trim());
+      const sub = clean.substring(idx, idx + 6);
+      if (sub.toUpperCase().startsWith("\r\nOR ")) {
+        lastIndex = idx + 5;
+      } else if (sub.toUpperCase().startsWith("\nOR ")) {
+        lastIndex = idx + 4;
+      } else {
+        lastIndex = idx + 4;
+      }
+    }
+    parts.push(clean.substring(lastIndex).trim());
+    return { parts, type: "OR" };
+  }
+
+  if (andIndices.length > 0) {
+    const parts: string[] = [];
+    let lastIndex = 0;
+    for (const idx of andIndices) {
+      parts.push(clean.substring(lastIndex, idx).trim());
+      const sub = clean.substring(idx, idx + 7);
+      if (sub.toUpperCase().startsWith("\r\nAND ")) {
+        lastIndex = idx + 6;
+      } else if (sub.toUpperCase().startsWith("\nAND ")) {
+        lastIndex = idx + 5;
+      } else {
+        lastIndex = idx + 5;
+      }
+    }
+    parts.push(clean.substring(lastIndex).trim());
+    return { parts, type: "AND" };
+  }
+
+  return { parts: [clean], type: null };
+}
+
 // Convert search input string into a list of conditions and its junction type
 export function splitByJunctions(str: string): { parts: string[]; isOr: boolean } {
   let parenDepth = 0;
@@ -257,38 +358,64 @@ export function parseAggFields(selectFields: string[]): AggMap[] {
 }
 
 // Translation helpers for MongoDB
-export function translateWhereForMongo(whereCondition: string, indent: string = "  "): string {
-  const { parts, isOr } = splitByJunctions(whereCondition);
-  const partsTranslated = parts
-    .map(part => {
-      const parsed = parseSingleCondition(part);
-      if (!parsed) return "";
-      const f = cleanFieldName(parsed.field);
-      const val = formatValueForMongo(parsed.value);
-      if (parsed.operator === "LIKE") {
-        const like = translateLikePattern(parsed.value);
-        if (like.type === "startswith") return `"${f}": { "$regex": "^${like.cleanVal}" }`;
-        if (like.type === "endswith") return `"${f}": { "$regex": "${like.cleanVal}$" }`;
-        if (like.type === "contains") return `"${f}": { "$regex": "${like.cleanVal}" }`;
-        return `"${f}": { "$eq": "${like.cleanVal}" }`;
-      } else {
-        const mOp = getMongoOperator(parsed.operator);
-        return `"${f}": { "${mOp}": ${val} }`;
-      }
-    })
-    .filter(x => x !== "");
+export function translateWhereForMongoRec(whereStr: string): string {
+  let clean = stripOuterParens(whereStr);
+  if (!clean) return "";
+
+  const { parts, type } = splitTopLevelJunction(clean);
+
+  if (type === "OR") {
+    const partsTranslated = parts
+      .map(part => {
+        const trans = translateWhereForMongoRec(part);
+        if (!trans) return "";
+        const trimmed = trans.trim();
+        if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+          return trimmed;
+        }
+        return `{ ${trimmed} }`;
+      })
+      .filter(x => x !== "");
     
-  if (partsTranslated.length === 0) return "{}";
-  if (isOr) {
-    const items = partsTranslated.map(p => `${indent}  { ${p} }`).join(",\n");
-    return `{\n${indent}"$or": [\n${items}\n${indent}]\n}`;
+    if (partsTranslated.length === 0) return "";
+    return `$or: [\n  ${partsTranslated.join(",\n  ")}\n]`;
   }
-  
-  if (partsTranslated.length > 1) {
-    return `{\n${indent}${partsTranslated.map(p => p).join(",\n" + indent)}\n}`;
+
+  if (type === "AND") {
+    const partsTranslated = parts
+      .map(part => translateWhereForMongoRec(part))
+      .filter(x => x !== "");
+    
+    if (partsTranslated.length === 0) return "";
+    return partsTranslated.join(", ");
   }
-  
-  return `{ ${partsTranslated[0]} }`;
+
+  // Leaf condition
+  const parsed = parseSingleCondition(clean);
+  if (!parsed) return "";
+  const f = cleanFieldName(parsed.field);
+  const val = formatValueForMongo(parsed.value);
+  if (parsed.operator === "LIKE") {
+    const like = translateLikePattern(parsed.value);
+    if (like.type === "startswith") return `${f}: { $regex: "^${like.cleanVal}" }`;
+    if (like.type === "endswith") return `${f}: { $regex: "${like.cleanVal}$" }`;
+    if (like.type === "contains") return `${f}: { $regex: "${like.cleanVal}" }`;
+    return `${f}: { $eq: "${like.cleanVal}" }`;
+  } else {
+    const mOp = getMongoOperator(parsed.operator);
+    return `${f}: { ${mOp}: ${val} }`;
+  }
+}
+
+export function translateWhereForMongo(whereCondition: string, indent: string = "  "): string {
+  const inner = translateWhereForMongoRec(whereCondition);
+  if (!inner) return "{}";
+  if (inner.includes("\n")) {
+    const lines = inner.split("\n");
+    const formatted = lines.map(line => indent + line).join("\n");
+    return `{\n${formatted}\n${indent.replace("  ", "")}}`;
+  }
+  return `{ ${inner} }`;
 }
 
 // Translation helpers for Pandas Filter Expressions with nested AND/OR operators translation
@@ -510,27 +637,27 @@ export function translateSql(sql: string, targetLanguage: string): string {
     if (hasGroupBy) {
       // Rule 1.5 - aggregate params setup
       const idField = parsed.groupByFields.map(f => `"$${cleanFieldName(f)}"`).join(", ");
-      const idObjStr = parsed.groupByFields.length > 1 ? `{ ${parsed.groupByFields.map(f => `"${cleanFieldName(f)}"` + `: "$${cleanFieldName(f)}"`).join(", ")} }` : `"$${cleanFieldName(parsed.groupByFields[0])}"`;
+      const idObjStr = parsed.groupByFields.length > 1 ? `{ ${parsed.groupByFields.map(f => `${cleanFieldName(f)}` + `: "$${cleanFieldName(f)}"`).join(", ")} }` : `"$${cleanFieldName(parsed.groupByFields[0])}"`;
       
       const aggs = parseAggFields(parsed.selectFields);
       const groupStageParts = [
-        `"_id": ${idObjStr}`
+        `_id: ${idObjStr}`
       ];
       
       for (const agg of aggs) {
         if (agg.field === "1") {
-          groupStageParts.push(`"${agg.alias}": { "$sum": 1 }`);
+          groupStageParts.push(`${agg.alias}: { $sum: 1 }`);
         } else {
-          groupStageParts.push(`"${agg.alias}": { "${agg.op}": "${agg.field}" }`);
+          groupStageParts.push(`${agg.alias}: { ${agg.op}: "${agg.field}" }`);
         }
       }
       
       const groupStageBody = groupStageParts.map(part => `      ${part}`).join(",\n");
-      const groupStage = `  {\n    "$group": {\n${groupStageBody}\n    }\n  }`;
+      const groupStage = `  {\n    $group: {\n${groupStageBody}\n    }\n  }`;
       
       if (hasWhere) {
         const whereMongo = translateWhereForMongo(parsed.whereCondition, "      ");
-        resultMongo = `db.${tbl}.aggregate([\n  {\n    "$match": ${whereMongo}\n  },\n${groupStage}\n])`;
+        resultMongo = `db.${tbl}.aggregate([\n  {\n    $match: ${whereMongo}\n  },\n${groupStage}\n])`;
       } else {
         resultMongo = `db.${tbl}.aggregate([\n${groupStage}\n])`;
       }
@@ -548,7 +675,7 @@ export function translateSql(sql: string, targetLanguage: string): string {
       if (isMultiline) {
         const whereMongo = translateWhereForMongo(parsed.whereCondition, "  ");
         if (hasProjection) {
-          const projParts = projectionFields.map(f => `  "${f}": 1`).join(",\n");
+          const projParts = projectionFields.map(f => `  ${f}: 1`).join(",\n");
           const projMongo = `{\n${projParts}\n}`;
           resultMongo = `db.${tbl}.find(\n  ${whereMongo.split("\n").join("\n  ")},\n  ${projMongo.split("\n").join("\n  ")}\n)`;
         } else {
@@ -557,7 +684,7 @@ export function translateSql(sql: string, targetLanguage: string): string {
       } else {
         const whereMongo = hasWhere ? translateWhereForMongo(parsed.whereCondition, "  ") : "{}";
         if (hasProjection) {
-          const projParts = projectionFields.map(f => `"${f}": 1`).join(", ");
+          const projParts = projectionFields.map(f => `${f}: 1`).join(", ");
           const projMongo = `{ ${projParts} }`;
           resultMongo = `db.${tbl}.find(${whereMongo}, ${projMongo})`;
         } else {
@@ -569,7 +696,7 @@ export function translateSql(sql: string, targetLanguage: string): string {
     // Rule 1.4 - Order By Sort
     if (hasOrderBy) {
       const sortPairs = parsed.orderByFields
-        .map(o => `"${cleanFieldName(o.column)}": ${o.direction === "DESC" ? -1 : 1}`)
+        .map(o => `${cleanFieldName(o.column)}: ${o.direction === "DESC" ? -1 : 1}`)
         .join(", ");
       resultMongo += `\n  .sort({ ${sortPairs} })`;
     }
