@@ -247,10 +247,10 @@ export default function App() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
         
         {/* Interactive Workspace Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        <div className="flex flex-col gap-8">
           
-          {/* COLUMN 1: Visual Blockly Editor (7 cols) */}
-          <section className="lg:col-span-7 flex flex-col gap-4">
+          {/* SECTION 1: Visual Blockly Editor (Full width) */}
+          <section className="w-full flex flex-col gap-4">
             <div className="bg-slate-900/40 p-5 rounded-2xl border border-slate-800/80 shadow-2xl backdrop-blur-sm flex flex-col gap-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -273,155 +273,170 @@ export default function App() {
             </div>
           </section>
 
-          {/* COLUMN 2: Raw Code Area & Utilities (5 cols) */}
-          <section className="lg:col-span-5 flex flex-col gap-6">
+          {/* SECTION 2: Manual Editor, Language Selector & Results (Grid 5-3-4 with Same Height) */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
             
-            {/* Box 1: SQL Code Input and Actions */}
-            <div className="bg-slate-900/40 p-5 rounded-2xl border border-slate-800/80 shadow-2xl backdrop-blur-sm flex flex-col gap-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-amber-400 shadow-lg shadow-amber-400/50"></div>
-                  <h2 className="text-xs font-bold tracking-wider font-display text-white uppercase">
-                    2. Query SQL (Editor Manual)
-                  </h2>
-                </div>
-                <span className="text-[10px] font-mono font-bold bg-amber-955/55 text-amber-300 px-2.5 py-0.5 rounded-lg border border-amber-900/60">
-                  ANSI SQL
-                </span>
-              </div>
-
-              <div className="relative">
-                <textarea
-                  id="sql-text-area"
-                  value={sqlQuery}
-                  onChange={(e) => setSqlQuery(e.target.value)}
-                  placeholder="SELECT * FROM table_name WHERE condition..."
-                  className="w-full h-[180px] p-4 bg-slate-950 text-emerald-400 font-mono text-sm leading-relaxed rounded-xl border border-slate-850 shadow-inner focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500/40 transition-colors"
-                  spellCheck="false"
-                />
-                
-                {/* Micro instructions overlay */}
-                <div className="absolute bottom-3 right-3 text-[10px] font-mono text-slate-400 bg-slate-900/90 px-2 py-1 rounded border border-slate-800">
-                  Modo Manual Ativo
-                </div>
-              </div>
-
-              {/* Action Buttons below Code Area (2.1 & 2.2) */}
-              <div className="grid grid-cols-2 gap-3 pt-1">
-                {/* Button 2.1: Atualizar */}
-                <button
-                  id="update-blockly-btn"
-                  onClick={handleUpdateBlockly}
-                  className="w-full py-3 px-4 bg-slate-950 text-slate-350 hover:bg-slate-900 active:bg-slate-850 hover:text-white font-semibold rounded-xl text-xs flex items-center justify-center gap-2 transition-all border border-slate-850 hover:border-slate-700 cursor-pointer select-none"
-                  title="Atualiza os blocos visuais para corresponder ao código escrito acima"
-                >
-                  <RefreshCw className="w-4 h-4 text-slate-400" />
-                  Atualizar Blocos
-                </button>
-
-                {/* Button 2.2: Traduzir */}
-                <button
-                  id="translate-btn"
-                  onClick={handleTranslateQuery}
-                  disabled={isLoading}
-                  className={`w-full py-3 px-4 text-slate-950 font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition-all shadow-lg shadow-cyan-950/25 cursor-pointer select-none ${
-                    isLoading
-                      ? "bg-cyan-950 text-cyan-700 cursor-not-allowed border border-cyan-900"
-                      : "bg-gradient-to-r from-cyan-400 to-indigo-500 hover:from-cyan-350 hover:to-indigo-400"
-                  }`}
-                >
-                  {isLoading ? (
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Sparkles className="w-4 h-4" />
-                  )}
-                  {isLoading ? "Traduzindo..." : "Traduzir Query"}
-                </button>
-              </div>
-            </div>
-
-            {/* Box 2: Target Database / Language Selector */}
-            <div className="bg-slate-900/40 p-5 rounded-2xl border border-slate-800/80 shadow-2xl backdrop-blur-sm flex flex-col gap-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-[10px] font-extrabold text-slate-450 uppercase tracking-widest font-display">
-                  Escolha o Alvo para Tradução:
-                </h3>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-5 gap-2">
-                {LANGUAGES.map((lang) => {
-                  const isSelected = targetLanguage === lang.id;
-                  return (
-                    <button
-                      key={lang.id}
-                      id={`lang-tab-${lang.id}`}
-                      onClick={() => setTargetLanguage(lang.id)}
-                      className={`flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
-                        isSelected
-                          ? `bg-cyan-950/40 border-cyan-500/80 shadow-lg shadow-cyan-950/40`
-                          : "border-slate-850/80 bg-slate-950/30 hover:bg-slate-850/50 text-slate-400 hover:border-slate-750 hover:text-slate-200"
-                      }`}
-                    >
-                      <span className="text-lg mb-1">{lang.icon}</span>
-                      <span className={`text-[10px] font-bold tracking-tight ${isSelected ? "text-cyan-400" : "text-slate-400"}`}>
-                        {lang.id}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Box 3: Translation Results Section */}
-            <div className="bg-slate-900/40 p-5 rounded-2xl border border-slate-800/80 shadow-2xl backdrop-blur-sm flex flex-col gap-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Terminal className="w-4 h-4 text-cyan-400" />
-                  <span className="text-[10px] font-extrabold text-slate-450 uppercase tracking-widest font-display">
-                    Resultado da Tradução
-                  </span>
-                </div>
-                
-                {translationResult && (
-                  <button
-                    id="copy-result-btn"
-                    onClick={handleCopyToClipboard}
-                    className="p-1 px-2.5 rounded-lg hover:bg-slate-800 hover:border-slate-700 bg-slate-950/80 text-xs font-bold text-cyan-400 flex items-center gap-1.5 cursor-pointer border border-slate-850 transition-all shadow-md"
-                  >
-                    {isCopied ? (
-                      <>
-                        <Check className="w-3.5 h-3.5 text-emerald-400" />
-                        Copiado!
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-3.5 h-3.5" />
-                        Copiar Código
-                      </>
-                    )}
-                  </button>
-                )}
-              </div>
-
-              <div className="min-h-[140px] bg-[#04060a] p-4 rounded-xl border border-slate-850 font-mono text-xs flex flex-col justify-between overflow-x-auto">
-                <code id="translation-output-code" className="text-cyan-400 whitespace-pre leading-relaxed block text-[13px]">
-                  {translationResult || (
-                    <span className="text-slate-500 italic block py-4 text-center">
-                      Nenhuma tradução solicitada ainda. Escolha a linguagem alvo acima e clique em 'Traduzir Query'.
+            {/* Box 1: SQL Code Input and Actions (Alinhado à esquerda) */}
+            <section className="lg:col-span-5 flex">
+              <div className="w-full bg-slate-900/40 p-5 rounded-2xl border border-slate-800/80 shadow-2xl backdrop-blur-sm flex flex-col gap-4 justify-between h-full">
+                <div className="flex flex-col gap-4 flex-1">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-amber-400 shadow-lg shadow-amber-400/50"></div>
+                      <h2 className="text-xs font-bold tracking-wider font-display text-white uppercase">
+                        2. Query SQL (Editor Manual)
+                      </h2>
+                    </div>
+                    <span className="text-[10px] font-mono font-bold bg-amber-955/55 text-amber-300 px-2.5 py-0.5 rounded-lg border border-amber-900/60">
+                      ANSI SQL
                     </span>
-                  )}
-                </code>
-
-                {translationResult && (
-                  <div className="mt-4 pt-3 border-t border-slate-850 flex justify-between items-center text-[10px]">
-                    <span className="text-slate-500">Sintaxe otimizada para:</span>
-                    <span className="text-cyan-400 font-bold uppercase tracking-wider">{targetLanguage}</span>
                   </div>
-                )}
-              </div>
-            </div>
 
-          </section>
+                  <div className="relative flex-1 flex flex-col min-h-[220px]">
+                    <textarea
+                      id="sql-text-area"
+                      value={sqlQuery}
+                      onChange={(e) => setSqlQuery(e.target.value)}
+                      placeholder="SELECT * FROM table_name WHERE condition..."
+                      className="w-full flex-1 p-4 bg-slate-950 text-emerald-400 font-mono text-sm leading-relaxed rounded-xl border border-slate-850 shadow-inner focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500/40 transition-colors resize-none"
+                      spellCheck="false"
+                    />
+                    
+                    {/* Micro instructions overlay */}
+                    <div className="absolute bottom-3 right-3 text-[10px] font-mono text-slate-400 bg-slate-900/90 px-2 py-1 rounded border border-slate-800 select-none">
+                      Modo Manual
+                    </div>
+                  </div>
+                </div>
+
+                {/* Action Buttons below Code Area */}
+                <div className="grid grid-cols-2 gap-3 pt-1 shrink-0">
+                  {/* Button 2.1: Atualizar */}
+                  <button
+                    id="update-blockly-btn"
+                    onClick={handleUpdateBlockly}
+                    className="w-full py-3 px-4 bg-slate-950 text-slate-350 hover:bg-slate-900 active:bg-slate-850 hover:text-white font-semibold rounded-xl text-xs flex items-center justify-center gap-2 transition-all border border-slate-850 hover:border-slate-700 cursor-pointer select-none"
+                    title="Atualiza os blocos visuais para corresponder ao código escrito acima"
+                  >
+                    <RefreshCw className="w-4 h-4 text-slate-400" />
+                    Atualizar Blocos
+                  </button>
+
+                  {/* Button 2.2: Traduzir */}
+                  <button
+                    id="translate-btn"
+                    onClick={handleTranslateQuery}
+                    disabled={isLoading}
+                    className={`w-full py-3 px-4 text-slate-950 font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition-all shadow-lg shadow-cyan-950/25 cursor-pointer select-none ${
+                      isLoading
+                        ? "bg-cyan-950 text-cyan-700 cursor-not-allowed border border-cyan-900"
+                        : "bg-gradient-to-r from-cyan-400 to-indigo-500 hover:from-cyan-350 hover:to-indigo-400"
+                    }`}
+                  >
+                    {isLoading ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-4 h-4" />
+                    )}
+                    {isLoading ? "Traduzindo..." : "Traduzir Query"}
+                  </button>
+                </div>
+              </div>
+            </section>
+
+            {/* Box 2: Target Database / Language Selector (À direita do editor, dispostos verticalmente com mesma altura) */}
+            <section className="lg:col-span-2 flex animate-fade-in">
+              <div className="w-full bg-slate-900/40 p-4 rounded-2xl border border-slate-800/80 shadow-2xl backdrop-blur-sm flex flex-col gap-3 justify-between h-full">
+                <div className="flex items-center justify-between shrink-0">
+                  <h3 className="text-[10px] font-extrabold text-slate-450 uppercase tracking-widest font-display">
+                    Sintaxe Alvo:
+                  </h3>
+                </div>
+
+                <div className="flex flex-col gap-2 flex-1 justify-between h-full py-1">
+                  {LANGUAGES.map((lang) => {
+                    const isSelected = targetLanguage === lang.id;
+                    return (
+                      <button
+                        key={lang.id}
+                        id={`lang-tab-${lang.id}`}
+                        onClick={() => setTargetLanguage(lang.id)}
+                        className={`flex-1 flex items-center gap-2 px-3 py-2 rounded-xl border text-left transition-all cursor-pointer ${
+                          isSelected
+                            ? `bg-cyan-950/40 border-cyan-500/80 shadow-lg shadow-cyan-900/40`
+                            : "border-slate-850/80 bg-slate-950/30 hover:bg-slate-850/50 text-slate-400 hover:border-slate-750 hover:text-slate-200"
+                        }`}
+                      >
+                        <span className="text-lg shrink-0">{lang.icon}</span>
+                        <div className="flex flex-col min-w-0">
+                          <span className={`text-[11px] font-bold tracking-tight ${isSelected ? "text-cyan-400" : "text-slate-400"}`}>
+                            {lang.id}
+                          </span>
+                          <span className="text-[8px] text-slate-500 truncate hidden xl:inline">
+                            {lang.exampleMatch}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </section>
+
+            {/* Box 3: Translation Results Section (Espaço restante à direita, alinhada à direita do Blockly, com mesma altura) */}
+            <section className="lg:col-span-5 flex animate-fade-in">
+              <div className="w-full bg-slate-900/40 p-5 rounded-2xl border border-slate-800/80 shadow-2xl backdrop-blur-sm flex flex-col gap-4 justify-between h-full">
+                <div className="flex flex-col gap-4 flex-1 h-full">
+                  <div className="flex items-center justify-between shrink-0">
+                    <div className="flex items-center gap-2">
+                      <Terminal className="w-4 h-4 text-cyan-400" />
+                      <span className="text-[10px] font-extrabold text-slate-450 uppercase tracking-widest font-display">
+                        Resultado da Tradução
+                      </span>
+                    </div>
+                    
+                    {translationResult && (
+                      <button
+                        id="copy-result-btn"
+                        onClick={handleCopyToClipboard}
+                        className="p-1 px-2.5 rounded-lg hover:bg-slate-800 hover:border-slate-700 bg-slate-950/80 text-xs font-bold text-cyan-400 flex items-center gap-1.5 cursor-pointer border border-slate-850 transition-all shadow-md"
+                      >
+                        {isCopied ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-400" />
+                            Copiado!
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5" />
+                            Copiar Código
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex-1 bg-[#04060a] p-4 rounded-xl border border-slate-850 font-mono text-xs flex flex-col justify-between overflow-auto min-h-[220px]">
+                    <code id="translation-output-code" className="text-cyan-400 whitespace-pre leading-relaxed block text-[13px] flex-1">
+                      {translationResult || (
+                        <span className="text-slate-500 italic block py-12 text-center">
+                          Nenhuma tradução solicitada ainda. Escolha a linguagem alvo ao lado e clique em 'Traduzir Query'.
+                        </span>
+                      )}
+                    </code>
+
+                    {translationResult && (
+                      <div className="mt-4 pt-3 border-t border-slate-850 flex justify-between items-center text-[10px] select-none shrink-0">
+                        <span className="text-slate-500">Sintaxe otimizada para:</span>
+                        <span className="text-cyan-400 font-bold uppercase tracking-wider">{targetLanguage}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+          </div>
 
         </div>
 
