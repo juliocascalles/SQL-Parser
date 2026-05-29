@@ -1,4 +1,4 @@
-import { parseSqlStringToData, ParsedSqlQuery, OrderByItem, splitSmart } from "./parser";
+import { parseSqlStringToData, ParsedSqlQuery, OrderByItem, splitSmart, JoinData } from "./parser";
 import { splitTopLevelJunction } from "./translate";
 
 export interface ParsedCond {
@@ -61,6 +61,166 @@ export function tryParseSimpleFilter(part: string): ParsedCond | null {
   return null;
 }
 
+// Check if a filter component is a trivial true check (e.g. 1=1)
+export function isTrivialTrue(str: string): boolean {
+  if (!str) return false;
+  const clean = stripOuterParens(str).trim().replace(/\s+/g, "");
+  return clean === "1=1" || clean === "1==1" || clean === "'1'='1'" || clean === "'1'=='1'" || clean === '"1"="1"' || clean === '"1"=="1"';
+}
+
+// Extract fields used in filter conditions to move them to SELECT clause safely
+export function extractFieldsFromCondition(cond: string): string[] {
+  if (!cond) return [];
+  // Strip out string literals enclosed in single or double quotes
+  let cleanCond = cond.replace(/'[^']*'/g, "");
+  cleanCond = cleanCond.replace(/"[^"]*"/g, "");
+  
+  const words = cleanCond.match(/\b[A-Za-z_][A-Za-z0-9_.]*\b/g) || [];
+  const keywords = new Set([
+    "and", "or", "not", "in", "like", "between", "is", "null", "on", "join",
+    "select", "from", "where", "group", "by", "order", "limit", "as", "year",
+    "count", "sum", "avg", "max", "min"
+  ]);
+  const fields: string[] = [];
+  for (const word of words) {
+    if (!keywords.has(word.toLowerCase()) && isNaN(Number(word))) {
+      fields.push(word);
+    }
+  }
+  return fields;
+}
+
+export interface SubqueryMatch {
+  field: string;
+  subquerySql: string;
+  fullMatchString: string; // the entire "field IN (SELECT ...)" substring to replace
+}
+
+// Walk through the WHERE clause and parse the subquery match safely returning balanced parentheses
+export function findSubquery(where: string): SubqueryMatch | null {
+  if (!where) return null;
+  const regex = /\b([A-Za-z0-9_.-]+)\s+IN\s*\(\s*SELECT\b/gi;
+  let match;
+  while ((match = regex.exec(where)) !== null) {
+    const field = match[1];
+    const startIndex = match.index;
+    const firstOpenParenIndex = where.indexOf("(", startIndex);
+    if (firstOpenParenIndex === -1) continue;
+
+    let parenDepth = 1;
+    let endIndex = -1;
+    for (let i = firstOpenParenIndex + 1; i < where.length; i++) {
+      const char = where[i];
+      if (char === "(") parenDepth++;
+      else if (char === ")") parenDepth--;
+
+      if (parenDepth === 0) {
+        endIndex = i;
+        break;
+      }
+    }
+
+    if (endIndex !== -1) {
+      const subquerySql = where.substring(firstOpenParenIndex + 1, endIndex).trim();
+      const fullMatchString = where.substring(startIndex, endIndex + 1);
+      return {
+        field,
+        subquerySql,
+        fullMatchString
+      };
+    }
+  }
+  return null;
+}
+
+// 2. Identify and convert subqueries into flat JOIN relations
+export function optimizeSubqueries(parsed: ParsedSqlQuery): ParsedSqlQuery {
+  let hasMore = true;
+  let currentParsed = { ...parsed };
+  let loops = 0; // Prevent infinite loop in case of bad parse
+  
+  while (hasMore && loops < 10) {
+    loops++;
+    const subqueryMatch = findSubquery(currentParsed.whereCondition);
+    if (!subqueryMatch) {
+      hasMore = false;
+      break;
+    }
+    
+    try {
+      const { field, subquerySql, fullMatchString } = subqueryMatch;
+      const subParsed = parseSqlStringToData(subquerySql);
+      if (!subParsed.mainTable || subParsed.selectFields.length === 0) {
+        // Bad or empty subquery, skip optimizing
+        hasMore = false;
+        break;
+      }
+      
+      const firstSubField = subParsed.selectFields[0];
+      const mainSelectsLower = new Set(currentParsed.selectFields.map(f => f.toLowerCase().trim()));
+      
+      const extraSelects: string[] = [];
+      // Move other select fields (slice(1))
+      for (const f of subParsed.selectFields.slice(1)) {
+        if (!mainSelectsLower.has(f.toLowerCase().trim())) {
+          extraSelects.push(f);
+          mainSelectsLower.add(f.toLowerCase().trim());
+        }
+      }
+      // Move fields from whereCondition
+      const whereFields = extractFieldsFromCondition(subParsed.whereCondition);
+      for (const wf of whereFields) {
+        if (!mainSelectsLower.has(wf.toLowerCase().trim()) && wf.toLowerCase() !== firstSubField.toLowerCase()) {
+          extraSelects.push(wf);
+          mainSelectsLower.add(wf.toLowerCase().trim());
+        }
+      }
+      
+      currentParsed.selectFields = [...currentParsed.selectFields, ...extraSelects];
+      currentParsed.orderByFields = [...currentParsed.orderByFields, ...subParsed.orderByFields];
+      
+      const currentGroupByLower = new Set(currentParsed.groupByFields.map(g => g.toLowerCase().trim()));
+      for (const gb of subParsed.groupByFields) {
+        if (!currentGroupByLower.has(gb.toLowerCase().trim())) {
+          currentParsed.groupByFields.push(gb);
+        }
+      }
+      
+      // Add join condition
+      const joinCondition = `(${field} = ${firstSubField})`;
+      currentParsed.joins.push({
+        joinType: "JOIN",
+        table: subParsed.mainTable,
+        onCondition: joinCondition
+      });
+      currentParsed.joins.push(...subParsed.joins);
+      
+      // Update where condition
+      const junction = splitTopLevelJunction(currentParsed.whereCondition);
+      if (junction.type) {
+        const newParts: string[] = [];
+        for (const part of junction.parts) {
+          if (part.includes(fullMatchString) || fullMatchString.includes(part)) {
+            continue;
+          }
+          newParts.push(part);
+        }
+        if (subParsed.whereCondition) {
+          newParts.push(subParsed.whereCondition);
+        }
+        currentParsed.whereCondition = newParts.join(` ${junction.type} `);
+      } else {
+        currentParsed.whereCondition = subParsed.whereCondition;
+      }
+    } catch (err) {
+      console.error("Subquery optimization error:", err);
+      hasMore = false;
+    }
+  }
+  
+  return currentParsed;
+}
+
 // 1. Convert YEAR(field) = year to field BETWEEN 'year-01-01' AND 'year-12-31'
 export function optimizeYearFilter(sql: string): string {
   return sql.replace(/\bYEAR\s*\(\s*([A-Za-z0-9_.]+)\s*\)\s*=\s*['"]?(\d{4})['"]?/gi, (match, field, year) => {
@@ -76,8 +236,6 @@ export function getColumnBaseName(expr: string): string {
 
 // 2. Ensure fields in GROUP BY or ORDER BY are in the SELECT clause
 export function addMissingSelectFields(parsed: ParsedSqlQuery): ParsedSqlQuery {
-  const hasStar = parsed.selectFields.some(f => f.trim() === "*");
-  
   // Track existing select fields, aliases and base column names
   const existingSelects = new Set<string>();
   const existingBases = new Set<string>();
@@ -142,7 +300,6 @@ export function addMissingSelectFields(parsed: ParsedSqlQuery): ParsedSqlQuery {
   }
   
   if (toAdd.length > 0) {
-    // If SELECT *, technically it has everything but users are explicit or we can keep "*" and append
     return {
       ...parsed,
       selectFields: [...parsed.selectFields, ...toAdd]
@@ -152,10 +309,14 @@ export function addMissingSelectFields(parsed: ParsedSqlQuery): ParsedSqlQuery {
   return parsed;
 }
 
-// 3. Recursive condition optimizer to group multiple OR filters into single IN
+// 3. Recursive condition optimizer to group multiple OR filters into single IN, remove 1=1 trivial conditions
 export function optimizeCondition(condStr: string): string {
   const trimmed = condStr.trim();
   if (!trimmed) return "";
+  
+  if (isTrivialTrue(trimmed)) {
+    return "";
+  }
   
   // Handle matching outer parentheses safely
   let clean = trimmed;
@@ -180,6 +341,10 @@ export function optimizeCondition(condStr: string): string {
       break;
     }
   }
+
+  if (isTrivialTrue(clean)) {
+    return "";
+  }
   
   // Split by top-level AND/OR junctions
   const junction = splitTopLevelJunction(clean);
@@ -190,7 +355,17 @@ export function optimizeCondition(condStr: string): string {
   }
   
   // Recursively process child condition parts
-  const optimizedParts = junction.parts.map(p => optimizeCondition(p));
+  const optimizedParts = junction.parts
+    .map(p => optimizeCondition(p))
+    .filter(p => p.trim() !== "");
+  
+  if (optimizedParts.length === 0) {
+    return "";
+  }
+  if (optimizedParts.length === 1) {
+    const single = optimizedParts[0];
+    return hasOuterParens ? `(${single})` : single;
+  }
   
   if (junction.type === "OR") {
     // Group identical fields in flat OR arrays
@@ -253,12 +428,15 @@ export function optimizeSqlQuery(sql: string): string {
   if (!sql.trim()) return "";
   
   try {
-    const rawParsed = parseSqlStringToData(sql);
+    let parsed = parseSqlStringToData(sql);
     
-    // 1 & 3: Run recursive condition optimizer on WHERE string and each JOIN's ON conditions
-    const optimizedWhere = rawParsed.whereCondition ? optimizeCondition(rawParsed.whereCondition) : "";
+    // 1. Convert subqueries to JOIN relations first
+    parsed = optimizeSubqueries(parsed);
     
-    const optimizedJoins = rawParsed.joins.map(join => {
+    // 2. Run recursive condition optimizer on WHERE string and each JOIN's ON conditions
+    const optimizedWhere = parsed.whereCondition ? optimizeCondition(parsed.whereCondition) : "";
+    
+    const optimizedJoins = parsed.joins.map(join => {
       const optimizedOn = join.onCondition ? optimizeCondition(join.onCondition) : "";
       return {
         ...join,
@@ -266,13 +444,13 @@ export function optimizeSqlQuery(sql: string): string {
       };
     });
     
-    let parsed = {
-      ...rawParsed,
+    parsed = {
+      ...parsed,
       whereCondition: optimizedWhere,
       joins: optimizedJoins
     };
 
-    // 2: Force append missing select fields referenced in ORDER BY and GROUP BY
+    // 3. Force append missing select fields referenced in ORDER BY and GROUP BY
     parsed = addMissingSelectFields(parsed);
 
     // Reconstruct the safe SQL Statement
