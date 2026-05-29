@@ -59,6 +59,81 @@ export function formatLine(line: string): string[] {
   return [line];
 }
 
+// Format pandas line: split lines > 25 at bracket, parenthesis, comma, space, operator (+, -, *, /) or dot (.)
+export function formatPandasLine(line: string): string[] {
+  if (line.length <= 25) {
+    return [line];
+  }
+
+  const breakChars = ["[", "]", "(", ")", ",", " ", "+", "-", "/", "*", "."];
+  let breakIdx = -1;
+
+  // Track quote states to avoid splitting inside string literals if possible
+  const inQuote = new Array(line.length).fill(false);
+  let currentQuote: string | null = null;
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (char === "'" || char === '"') {
+      if (currentQuote === char) {
+        currentQuote = null;
+      } else if (currentQuote === null) {
+        currentQuote = char;
+      }
+    }
+    inQuote[i] = (currentQuote !== null);
+  }
+
+  // Search forward from 25, preferring indices not in quotes
+  for (let i = 25; i < line.length; i++) {
+    if (breakChars.includes(line[i]) && !inQuote[i]) {
+      breakIdx = i;
+      break;
+    }
+  }
+
+  // Backtrack from 24 down to 0, preferring indices not in quotes
+  if (breakIdx === -1) {
+    for (let i = 24; i >= 0; i--) {
+      if (breakChars.includes(line[i]) && !inQuote[i]) {
+        breakIdx = i;
+        break;
+      }
+    }
+  }
+
+  // Fallback: search ignoring quote rules if no safe breaks found
+  if (breakIdx === -1) {
+    for (let i = 25; i < line.length; i++) {
+      if (breakChars.includes(line[i])) {
+        breakIdx = i;
+        break;
+      }
+    }
+  }
+  if (breakIdx === -1) {
+    for (let i = 24; i >= 0; i--) {
+      if (breakChars.includes(line[i])) {
+        breakIdx = i;
+        break;
+      }
+    }
+  }
+
+  if (breakIdx !== -1) {
+    const part1 = line.substring(0, breakIdx + 1);
+    const part2 = line.substring(breakIdx + 1);
+
+    const trimmedPart2 = part2.trim();
+    if (trimmedPart2 && trimmedPart2.length < line.length) {
+      return [part1.trimEnd(), ...formatPandasLine(trimmedPart2)];
+    } else {
+      return [part1.trimEnd(), trimmedPart2].filter(Boolean);
+    }
+  }
+
+  return [line];
+}
+
 // Strip outer quotes of string literals
 export function cleanValueQuotes(val: string): string {
   let cleanValue = val.trim();
@@ -279,7 +354,7 @@ export function parseSingleCondition(str: string): SingleCondition | null {
     clean = clean.substring(1, clean.length - 1).trim();
   }
   
-  const ops = [">=", "<=", "!=", "<>", ">", "<", "=", "LIKE"];
+  const ops = [">=", "<=", "!=", "<>", ">", "<", "=", "LIKE", "IN"];
   let foundOp = "";
   let opIndex = -1;
   
@@ -307,6 +382,12 @@ export function parseSingleCondition(str: string): SingleCondition | null {
           if (op === "LIKE") {
             if (sub.toUpperCase() === "LIKE" && (i === 0 || /\s/.test(clean[i - 1])) && (i + op.length === clean.length || /\s/.test(clean[i + op.length]))) {
               foundOp = "LIKE";
+              opIndex = i;
+              break;
+            }
+          } else if (op === "IN") {
+            if (sub.toUpperCase() === "IN" && (i === 0 || /\s/.test(clean[i - 1])) && (i + op.length === clean.length || /\s/.test(clean[i + op.length]))) {
+              foundOp = "IN";
               opIndex = i;
               break;
             }
@@ -453,6 +534,14 @@ export function translateWhereForMongoRec(whereStr: string): string {
     if (like.type === "endswith") return `${f}: { $regex: "${like.cleanVal}$" }`;
     if (like.type === "contains") return `${f}: { $regex: "${like.cleanVal}" }`;
     return `${f}: { $eq: "${like.cleanVal}" }`;
+  } else if (parsed.operator === "IN") {
+    let inVal = parsed.value.trim();
+    if (inVal.startsWith("(") && inVal.endsWith(")")) {
+      const inner = inVal.substring(1, inVal.length - 1);
+      const items = inner.split(",").map(x => formatValueForMongo(x.trim()));
+      return `${f}: { $in: [${items.join(", ")}] }`;
+    }
+    return `${f}: { $in: [${formatValueForMongo(inVal)}] }`;
   } else {
     const mOp = getMongoOperator(parsed.operator);
     return `${f}: { ${mOp}: ${val} }`;
@@ -698,6 +787,20 @@ export function translateWhereForPandas(whereStr: string): string {
       return `${colExpr}.str.contains('${like.cleanVal}')`;
     }
     return `${colExpr} == '${like.cleanVal}'`;
+  } else if (cond.operator === "IN") {
+    let inVal = cond.value.trim();
+    if (inVal.startsWith("(") && inVal.endsWith(")")) {
+      const inner = inVal.substring(1, inVal.length - 1);
+      const items = inner.split(",").map(x => {
+        const itemClean = cleanValueQuotes(x.trim());
+        if (isNaN(Number(itemClean)) || itemClean === "") {
+          return `'${itemClean}'`;
+        }
+        return itemClean;
+      });
+      inVal = `(${items.join(", ")})`;
+    }
+    return `${colExpr} in ${inVal}`;
   } else {
     const pOp = operatorMap[cond.operator] || "==";
     let pVal = cleanValueQuotes(cond.value);
@@ -1011,7 +1114,15 @@ export function translateSql(sql: string, targetLanguage: string): string {
     }
     
     resultPandas += `df = ${chain}`;
-    return resultPandas;
+
+    const lines = resultPandas.split("\n");
+    const formattedLines = lines.flatMap(line => {
+      if (line.trim().startsWith("#") || !line.trim()) {
+        return [line];
+      }
+      return formatPandasLine(line);
+    });
+    return formattedLines.join("\n");
   }
   
   // -------------------------------- Oracle, SqlServer, PostgreSQL Translations --------------------------------
