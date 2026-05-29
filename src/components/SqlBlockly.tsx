@@ -3,6 +3,19 @@ import * as Blockly from "blockly";
 import { parseSqlStringToData } from "../parser.ts";
 import { Columns, Database, Filter, Layers, ArrowDownAZ, GitMerge } from "lucide-react";
 
+// Define the mutable list of support functions for the function item dropdown
+const DYNAMIC_FUNCTIONS: [string, string][] = [
+  ["COUNT", "COUNT"],
+  ["SUM", "SUM"],
+  ["AVG", "AVG"],
+  ["MIN", "MIN"],
+  ["MAX", "MAX"],
+  ["UPPER", "UPPER"],
+  ["LOWER", "LOWER"],
+  ["ROUND", "ROUND"],
+  ["SUBSTRING", "SUBSTRING"]
+];
+
 // Define the blocks configuration JSON array
 const BLOCKS_JSON = [
   {
@@ -55,15 +68,7 @@ const BLOCKS_JSON = [
       {
         "type": "field_dropdown",
         "name": "FUNC_NAME",
-        "options": [
-          ["COUNT", "COUNT"],
-          ["SUM", "SUM"],
-          ["AVG", "AVG"],
-          ["MIN", "MIN"],
-          ["MAX", "MAX"],
-          ["UPPER", "UPPER"],
-          ["LOWER", "LOWER"]
-        ]
+        "options": DYNAMIC_FUNCTIONS
       },
       { "type": "field_input", "name": "PARAM", "text": "*" },
       { "type": "field_input", "name": "ALIAS", "text": "total" },
@@ -661,9 +666,23 @@ export default function SqlBlockly({ onSqlChange, editorTriggerRef }: SqlBlockly
             const param = funcMatch[2].trim();
             const alias = funcMatch[3] ? funcMatch[3].trim() : "";
 
+            // Dynamic check: if funcName is not in option list, add it dynamically (Requirement 2)
+            if (!DYNAMIC_FUNCTIONS.some(opt => opt[1] === funcName)) {
+              DYNAMIC_FUNCTIONS.push([funcName, funcName]);
+            }
+
             const selectItemBlock = ws.newBlock("sql_function_item");
             selectItemBlock.initSvg();
             selectItemBlock.render();
+
+            // Settle instance dropdown options directly to ensure correct visual rendering
+            const dropdown = selectItemBlock.getField("FUNC_NAME") as any;
+            if (dropdown && Array.isArray(dropdown.menuGenerator_)) {
+              if (!dropdown.menuGenerator_.some((opt: any) => opt[1] === funcName)) {
+                dropdown.menuGenerator_.push([funcName, funcName]);
+              }
+            }
+
             selectItemBlock.setFieldValue(funcName, "FUNC_NAME");
             selectItemBlock.setFieldValue(param, "PARAM");
             selectItemBlock.setFieldValue(alias, "ALIAS");

@@ -7,6 +7,58 @@ interface SingleCondition {
   value: string;
 }
 
+// Format line: split lines > 40 at the next comma, opening parenthesis, space, or operator (+, -, *, /)
+export function formatLine(line: string): string[] {
+  if (line.length <= 40) {
+    return [line];
+  }
+
+  const breakChars = [",", "(", " ", "+", "-", "*", "/"];
+  let breakIdx = -1;
+  // Search forward from index 40
+  for (let i = 40; i < line.length; i++) {
+    if (breakChars.includes(line[i])) {
+      breakIdx = i;
+      break;
+    }
+  }
+
+  // Search backward from index 39 if no forward match can be found
+  if (breakIdx === -1) {
+    for (let i = 39; i >= 0; i--) {
+      if (breakChars.includes(line[i])) {
+        breakIdx = i;
+        break;
+      }
+    }
+  }
+
+  if (breakIdx !== -1) {
+    const char = line[breakIdx];
+    let part1 = "";
+    let part2 = "";
+    if (char === " ") {
+      part1 = line.substring(0, breakIdx);
+      part2 = line.substring(breakIdx + 1);
+    } else if (char === "(") {
+      part1 = line.substring(0, breakIdx);
+      part2 = line.substring(breakIdx);
+    } else {
+      part1 = line.substring(0, breakIdx + 1);
+      part2 = line.substring(breakIdx + 1);
+    }
+
+    const trimmedPart2 = part2.trim();
+    if (trimmedPart2 && trimmedPart2.length < line.length) {
+      return [part1.trimEnd(), ...formatLine(trimmedPart2)];
+    } else {
+      return [part1.trimEnd(), trimmedPart2].filter(Boolean);
+    }
+  }
+
+  return [line];
+}
+
 // Strip outer quotes of string literals
 export function cleanValueQuotes(val: string): string {
   let cleanValue = val.trim();
@@ -822,5 +874,14 @@ export function translateSql(sql: string, targetLanguage: string): string {
   
   // -------------------------------- Oracle, SqlServer, PostgreSQL Translations --------------------------------
   // Rule 3 - Dialog convert mapping
-  return parseAndTranslateDialects(sql, targetLanguage);
+  const translated = parseAndTranslateDialects(sql, targetLanguage);
+  
+  if (targetLanguage === "Oracle" || targetLanguage === "SqlServer" || targetLanguage === "Postgre") {
+    // Format the translated result: line length > 40 should be broken at next comma, open paren, space or +, -, *, /
+    const lines = translated.split("\n");
+    const formattedLines = lines.flatMap(line => formatLine(line));
+    return formattedLines.join("\n");
+  }
+  
+  return translated;
 }
