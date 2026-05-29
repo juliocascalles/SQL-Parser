@@ -164,7 +164,8 @@ const BLOCKS_JSON = [
           ["<=", "<="],
           ["<>", "<>"],
           ["LIKE", "LIKE"],
-          ["IN", "IN"]
+          ["IN", "IN"],
+          ["BETWEEN", "BETWEEN"]
         ]
       },
       { "type": "field_input", "name": "VALUE", "text": "18" }
@@ -452,6 +453,7 @@ export function buildWhereBlockRecursively(whereStr: string, workspace: any): an
   let inBacktick = false;
   let orIdx = -1;
   let andIdx = -1;
+  let betweenCount = 0;
 
   for (let i = 0; i < whereStr.length; i++) {
     const char = whereStr[i];
@@ -482,6 +484,12 @@ export function buildWhereBlockRecursively(whereStr: string, workspace: any): an
     else if (char === ")") parenDepth--;
 
     if (parenDepth === 0) {
+      // Track BETWEEN to avoid splitting AND inside BETWEEN
+      const subBetween = whereStr.substring(i, i + 7).toUpperCase();
+      if (subBetween === "BETWEEN" && (i === 0 || !/[A-Za-z0-9_]/.test(whereStr[i - 1])) && (i + 7 === whereStr.length || !/[A-Za-z0-9_]/.test(whereStr[i + 7]))) {
+        betweenCount++;
+      }
+
       const sub4 = whereStr.substring(i, i + 4).toUpperCase();
       if (sub4 === " OR " || sub4 === "OR\t" || sub4 === "\tOR ") {
         orIdx = i;
@@ -490,8 +498,12 @@ export function buildWhereBlockRecursively(whereStr: string, workspace: any): an
 
       const sub5 = whereStr.substring(i, i + 5).toUpperCase();
       if (sub5 === " AND " || sub5 === "AND\t" || sub5 === "\tAND ") {
-        if (andIdx === -1) {
-          andIdx = i;
+        if (betweenCount > 0) {
+          betweenCount--;
+        } else {
+          if (andIdx === -1) {
+            andIdx = i;
+          }
         }
       }
     }
@@ -540,7 +552,8 @@ export function buildWhereBlockRecursively(whereStr: string, workspace: any): an
     { op: ">" },
     { op: "<" },
     { op: "LIKE" },
-    { op: "IN" }
+    { op: "IN" },
+    { op: "BETWEEN" }
   ];
 
   let foundOp = null;
@@ -586,7 +599,7 @@ export function buildWhereBlockRecursively(whereStr: string, workspace: any): an
     if (parenDepth === 0) {
       for (const opItem of operators) {
         const op = opItem.op;
-        if (op === "LIKE" || op === "IN") {
+        if (op === "LIKE" || op === "IN" || op === "BETWEEN") {
           if (i > 0 && /\w/.test(whereStr[i - 1])) continue;
           const len = op.length;
           const sub = whereStr.substring(i, i + len).toUpperCase();
@@ -657,7 +670,7 @@ export default function SqlBlockly({ onSqlChange, editorTriggerRef }: SqlBlockly
         let parentInputConnection = queryBlock.getInput("FIELDS")?.connection;
         for (const fieldName of data.selectFields) {
           const cleanField = fieldName.trim();
-          if (!cleanField) continue;
+          if (!cleanField || cleanField === "*") continue;
 
           // Check if it's an aggregate function expression like COUNT(*) or SUM(amount) AS total
           const funcMatch = /^([A-Za-z0-9_]+)\s*\(([^)]*)\)(?:\s+(?:AS\s+)?([A-Za-z0-9_]+))?$/i.exec(cleanField);

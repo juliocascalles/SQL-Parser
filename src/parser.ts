@@ -321,7 +321,8 @@ export function parseSqlStringToData(sql: string): ParsedSqlQuery {
   const clauses = extractRawClauses(sql);
 
   // 1. SELECT fields split by comma
-  const selectFields = clauses.SELECT ? splitSmart(clauses.SELECT) : ["*"];
+  let selectFields = clauses.SELECT ? splitSmart(clauses.SELECT) : [];
+  selectFields = selectFields.map(f => f.trim()).filter(f => f && f !== "*");
 
   // 2. FROM and JOIN parser
   const { mainTable, joins } = parseFromAndJoins(clauses.FROM);

@@ -12,10 +12,12 @@ import {
   FileSpreadsheet,
   ArrowRight,
   Settings,
-  HelpCircle
+  HelpCircle,
+  Lightbulb
 } from "lucide-react";
 import SqlBlockly from "./components/SqlBlockly";
 import { translateSql } from "./translate";
+import { optimizeSqlQuery } from "./optimization";
 
 // Define supported translation target languages
 interface LanguageOption {
@@ -134,6 +136,25 @@ export default function App() {
     }
   };
 
+  // Optimize SQL Query handler
+  const handleOptimizeQuery = () => {
+    if (!sqlQuery.trim()) {
+      showFeedback("error", "Área de texto vazia. Escreva SQL para otimizar.");
+      return;
+    }
+    try {
+      const optimized = optimizeSqlQuery(sqlQuery);
+      setSqlQuery(optimized);
+      if (blocklyRebuiltCallbackRef.current) {
+        blocklyRebuiltCallbackRef.current(optimized);
+      }
+      showFeedback("success", "Sua query foi otimizada com sucesso!");
+    } catch (err) {
+      showFeedback("error", "Ocorreu um erro ao otimizar a query.");
+      console.error(err);
+    }
+  };
+
   // Call the translate API (Rule 2.2)
   const handleTranslateQuery = async () => {
     if (!sqlQuery.trim() || sqlQuery.startsWith("--")) {
@@ -204,7 +225,7 @@ export default function App() {
               <h1 className="text-xl font-display font-bold tracking-tight text-white flex items-center gap-2">
                 SQL-Parser
                 <span className="text-[10px] uppercase font-mono tracking-widest px-1.5 py-0.5 rounded bg-cyan-950/60 text-cyan-400 font-bold border border-cyan-800">
-                  v1.2026.05.26
+                  v1.2026.05.30
                 </span>
               </h1>
               <p className="text-xs text-slate-400">
@@ -252,13 +273,30 @@ export default function App() {
           {/* SECTION 1: Visual Blockly Editor (Full width) */}
           <section className="w-full flex flex-col gap-4">
             <div className="bg-slate-900/40 p-5 rounded-2xl border border-slate-800/80 shadow-2xl backdrop-blur-sm flex flex-col gap-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+                {/* Left block title */}
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-cyan-500 shadow-lg shadow-cyan-500/50"></div>
                   <h2 className="text-xs font-bold tracking-wider font-display text-white uppercase">
                     1. Editor Visual (Blockly)
                   </h2>
                 </div>
+
+                {/* Center: Discreet Optimization Button */}
+                <div className="flex items-center justify-center">
+                  <button
+                    id="optimize-query-btn"
+                    onClick={handleOptimizeQuery}
+                    className="flex items-center gap-1.5 px-3 py-1 bg-slate-950 hover:bg-cyan-950/60 text-slate-400 hover:text-cyan-400 border border-slate-800 hover:border-cyan-800/80 rounded-lg text-xs font-semibold cursor-pointer active:scale-95 transition-all select-none group shadow-inner"
+                    title="otimização"
+                    aria-label="otimização"
+                  >
+                    <Lightbulb className="w-3.5 h-3.5 text-yellow-500 group-hover:text-cyan-400 transition-colors animate-pulse" />
+                    <span>Otimizar Query</span>
+                  </button>
+                </div>
+
+                {/* Right help instructions */}
                 <div className="flex items-center gap-1.5 text-xs text-slate-400">
                   <HelpCircle className="w-3.5 h-3.5 text-slate-500" />
                   <span>Arraste blocos para montar a query</span>

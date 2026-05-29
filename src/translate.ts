@@ -269,6 +269,7 @@ export function splitTopLevelJunction(str: string): { parts: string[]; type: "AN
   let inSingleQuote = false;
   let inDoubleQuote = false;
   let inBacktick = false;
+  let betweenCount = 0;
 
   const orIndices: number[] = [];
   const andIndices: number[] = [];
@@ -287,13 +288,23 @@ export function splitTopLevelJunction(str: string): { parts: string[]; type: "AN
       else if (char === ")") parenDepth--;
 
       if (parenDepth === 0) {
+        // Track BETWEEN to avoid splitting AND inside BETWEEN
+        const subBetween = clean.substring(i, i + 7).toUpperCase();
+        if (subBetween === "BETWEEN" && (i === 0 || !/[A-Za-z0-9_]/.test(clean[i - 1])) && (i + 7 === clean.length || !/[A-Za-z0-9_]/.test(clean[i + 7]))) {
+          betweenCount++;
+        }
+
         // Look for OR
         if (clean.substring(i, i + 4).toUpperCase() === " OR " || clean.substring(i, i + 4).toUpperCase() === "\nOR " || clean.substring(i, i + 4).toUpperCase() === "\r\nOR ") {
           orIndices.push(i);
         }
         // Look for AND
         else if (clean.substring(i, i + 5).toUpperCase() === " AND " || clean.substring(i, i + 5).toUpperCase() === "\nAND " || clean.substring(i, i + 5).toUpperCase() === "\r\nAND ") {
-          andIndices.push(i);
+          if (betweenCount > 0) {
+            betweenCount--;
+          } else {
+            andIndices.push(i);
+          }
         }
       }
     }
@@ -345,6 +356,7 @@ export function splitByJunctions(str: string): { parts: string[]; isOr: boolean 
   let inDoubleQuote = false;
   let inBacktick = false;
   let hasOr = false;
+  let betweenCount = 0;
   
   const indices: number[] = [];
   const types: string[] = []; // "OR" or "AND"
@@ -363,13 +375,23 @@ export function splitByJunctions(str: string): { parts: string[]; isOr: boolean 
       else if (char === ")") parenDepth--;
       
       if (parenDepth === 0) {
+        // Track BETWEEN to avoid splitting AND inside BETWEEN
+        const subBetween = str.substring(i, i + 7).toUpperCase();
+        if (subBetween === "BETWEEN" && (i === 0 || !/[A-Za-z0-9_]/.test(str[i - 1])) && (i + 7 === str.length || !/[A-Za-z0-9_]/.test(str[i + 7]))) {
+          betweenCount++;
+        }
+
         if (str.substring(i, i + 4).toUpperCase() === " OR " || str.substring(i, i + 4).toUpperCase() === "\nOR ") {
           indices.push(i);
           types.push("OR");
           hasOr = true;
         } else if (str.substring(i, i + 5).toUpperCase() === " AND " || str.substring(i, i + 5).toUpperCase() === "\nAND ") {
-          indices.push(i);
-          types.push("AND");
+          if (betweenCount > 0) {
+            betweenCount--;
+          } else {
+            indices.push(i);
+            types.push("AND");
+          }
         }
       }
     }
@@ -407,7 +429,7 @@ export function parseSingleCondition(str: string): SingleCondition | null {
     clean = clean.substring(1, clean.length - 1).trim();
   }
   
-  const ops = [">=", "<=", "!=", "<>", ">", "<", "=", "LIKE", "IN"];
+  const ops = [">=", "<=", "!=", "<>", ">", "<", "=", "LIKE", "IN", "BETWEEN"];
   let foundOp = "";
   let opIndex = -1;
   
@@ -441,6 +463,12 @@ export function parseSingleCondition(str: string): SingleCondition | null {
           } else if (op === "IN") {
             if (sub.toUpperCase() === "IN" && (i === 0 || /\s/.test(clean[i - 1])) && (i + op.length === clean.length || /\s/.test(clean[i + op.length]))) {
               foundOp = "IN";
+              opIndex = i;
+              break;
+            }
+          } else if (op === "BETWEEN") {
+            if (sub.toUpperCase() === "BETWEEN" && (i === 0 || /\s/.test(clean[i - 1])) && (i + op.length === clean.length || /\s/.test(clean[i + op.length]))) {
+              foundOp = "BETWEEN";
               opIndex = i;
               break;
             }
@@ -587,6 +615,11 @@ export function translateWhereForMongoRec(whereStr: string): string {
     if (like.type === "endswith") return `${f}: { $regex: "${like.cleanVal}$" }`;
     if (like.type === "contains") return `${f}: { $regex: "${like.cleanVal}" }`;
     return `${f}: { $eq: "${like.cleanVal}" }`;
+  } else if (parsed.operator === "BETWEEN") {
+    const parts = parsed.value.split(/\s+AND\s+/i);
+    const val1 = formatValueForMongo(parts[0]?.trim() || "");
+    const val2 = formatValueForMongo(parts[1]?.trim() || "");
+    return `${f}: { $gte: ${val1}, $lte: ${val2} }`;
   } else if (parsed.operator === "IN") {
     let inVal = parsed.value.trim();
     if (inVal.startsWith("(") && inVal.endsWith(")")) {
@@ -840,6 +873,17 @@ export function translateWhereForPandas(whereStr: string): string {
       return `${colExpr}.str.contains('${like.cleanVal}')`;
     }
     return `${colExpr} == '${like.cleanVal}'`;
+  } else if (cond.operator === "BETWEEN") {
+    const parts = cond.value.split(/\s+AND\s+/i);
+    let val1 = cleanValueQuotes(parts[0]?.trim() || "");
+    let val2 = cleanValueQuotes(parts[1]?.trim() || "");
+    if (isNaN(Number(val1)) || val1 === "") {
+      val1 = `'${val1}'`;
+    }
+    if (isNaN(Number(val2)) || val2 === "") {
+      val2 = `'${val2}'`;
+    }
+    return `(${colExpr} >= ${val1}) & (${colExpr} <= ${val2})`;
   } else if (cond.operator === "IN") {
     let inVal = cond.value.trim();
     if (inVal.startsWith("(") && inVal.endsWith(")")) {
