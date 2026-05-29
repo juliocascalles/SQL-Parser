@@ -134,6 +134,59 @@ export function formatPandasLine(line: string): string[] {
   return [line];
 }
 
+// Format MongoDB line: split lines > 30 and insert a line break right after {
+export function formatMongoLine(line: string): string[] {
+  if (line.length <= 30) {
+    return [line];
+  }
+
+  // Track quote states to avoid splitting inside string literals if possible
+  const inQuote = new Array(line.length).fill(false);
+  let currentQuote: string | null = null;
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (char === "'" || char === '"') {
+      if (currentQuote === char) {
+        currentQuote = null;
+      } else if (currentQuote === null) {
+        currentQuote = char;
+      }
+    }
+    inQuote[i] = (currentQuote !== null);
+  }
+
+  // Find the first '{' not in a quote
+  let breakIdx = -1;
+  for (let i = 0; i < line.length; i++) {
+    if (line[i] === "{" && !inQuote[i]) {
+      breakIdx = i;
+      break;
+    }
+  }
+
+  // Fallback: finding any '{' in case all are quoted but we still need to break
+  if (breakIdx === -1) {
+    breakIdx = line.indexOf("{");
+  }
+
+  if (breakIdx !== -1) {
+    const part1 = line.substring(0, breakIdx + 1);
+    const part2 = line.substring(breakIdx + 1);
+
+    const leadingSpaces = line.match(/^\s*/)?.[0] || "";
+    const trimmedPart2 = part2.trim();
+    const indentedPart2 = leadingSpaces + "  " + trimmedPart2;
+
+    if (trimmedPart2 && trimmedPart2.length < line.length) {
+      return [part1.trimEnd(), ...formatMongoLine(indentedPart2)];
+    } else {
+      return [part1.trimEnd(), trimmedPart2].filter(Boolean);
+    }
+  }
+
+  return [line];
+}
+
 // Strip outer quotes of string literals
 export function cleanValueQuotes(val: string): string {
   let cleanValue = val.trim();
@@ -982,7 +1035,14 @@ export function translateSql(sql: string, targetLanguage: string): string {
       resultMongo += `\n  .limit(${parsed.limit})`;
     }
     
-    return resultMongo;
+    const lines = resultMongo.split("\n");
+    const formattedLines = lines.flatMap(line => {
+      if (line.trim().startsWith("//") || !line.trim()) {
+        return [line];
+      }
+      return formatMongoLine(line);
+    });
+    return formattedLines.join("\n");
   }
   
   // -------------------------------- Pandas Translation --------------------------------
