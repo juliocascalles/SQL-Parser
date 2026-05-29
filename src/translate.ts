@@ -1,4 +1,4 @@
-import { parseSqlStringToData, ParsedSqlQuery, JoinData, OrderByItem } from "./parser";
+import { parseSqlStringToData, ParsedSqlQuery, JoinData, OrderByItem, splitSmart } from "./parser";
 
 // Interface for condition structures
 interface SingleCondition {
@@ -470,6 +470,128 @@ export function translateWhereForMongo(whereCondition: string, indent: string = 
   return `{ ${inner} }`;
 }
 
+export interface FunctionTranslation {
+  original: string;
+  alias: string;
+  pandasFormula: string;
+  targetCol: string;
+}
+
+export function tryTranslateFunction(selectExpr: string): FunctionTranslation | null {
+  const parts = selectExpr.split(/\s+AS\s+/i);
+  const expr = parts[0].trim();
+  const alias = parts[1] ? parts[1].trim() : "";
+  
+  const lowerExpr = expr.toLowerCase();
+  
+  if (lowerExpr.startsWith("coalesce(")) {
+    const match = /^coalesce\((.*)\)$/i.exec(expr);
+    if (match) {
+      const inner = match[1].trim();
+      const params = splitSmart(inner, ",");
+      if (params.length > 0) {
+        const fieldName = cleanFieldName(params[0]);
+        const otherParams = params.slice(1).map(p => cleanValueQuotes(p).trim()).join(", ");
+        const finalCol = alias || fieldName;
+        return {
+          original: selectExpr,
+          alias: finalCol,
+          pandasFormula: `df['${fieldName}'].fillna(${otherParams})`,
+          targetCol: finalCol
+        };
+      }
+    }
+  }
+  
+  if (lowerExpr.startsWith("cast(")) {
+    const match = /^cast\((.*)\)$/i.exec(expr);
+    if (match) {
+      const inner = match[1].trim();
+      let fieldName = "";
+      let dataType = "";
+      const innerAsMatch = /\s+AS\s+/i.exec(inner);
+      if (innerAsMatch) {
+         fieldName = cleanFieldName(inner.substring(0, innerAsMatch.index).trim());
+         dataType = inner.substring(innerAsMatch.index + innerAsMatch[0].length).trim();
+      } else {
+         const params = splitSmart(inner, ",");
+         if (params.length > 0) {
+           fieldName = cleanFieldName(params[0]);
+           dataType = params.slice(1).join(", ").trim();
+         }
+      }
+      
+      if (fieldName) {
+        let pyType = cleanValueQuotes(dataType).toLowerCase().trim();
+        if (pyType === "varchar" || pyType === "char" || pyType === "string") {
+          pyType = "str";
+        } else if (pyType === "integer") {
+          pyType = "int";
+        } else if (pyType === "double" || pyType === "numeric" || pyType === "real" || pyType === "float") {
+          pyType = "float";
+        }
+        const finalCol = alias || fieldName;
+        return {
+          original: selectExpr,
+          alias: finalCol,
+          pandasFormula: `df['${fieldName}'].astype(${pyType})`,
+          targetCol: finalCol
+        };
+      }
+    }
+  }
+  
+  if (lowerExpr.startsWith("trim(")) {
+    const match = /^trim\((.*)\)$/i.exec(expr);
+    if (match) {
+      const inner = match[1].trim();
+      const fieldName = cleanFieldName(inner);
+      const finalCol = alias || fieldName;
+      return {
+        original: selectExpr,
+        alias: finalCol,
+        pandasFormula: `df['${fieldName}'].str.strip()`,
+        targetCol: finalCol
+      };
+    }
+  }
+  
+  if (lowerExpr.startsWith("percentile_cont(")) {
+    const withinGroupRegex = /percentile_cont\s*\(\s*([^)]+)\s*\)\s*within\s+group\s*\(\s*order\s+by\s+([^)]+)\s*\)/i;
+    const withinMatch = withinGroupRegex.exec(expr);
+    if (withinMatch) {
+      const val = withinMatch[1].trim();
+      const colName = cleanFieldName(withinMatch[2]);
+      const finalCol = alias || `quantile_${colName}`;
+      return {
+        original: selectExpr,
+        alias: finalCol,
+        pandasFormula: `df['${colName}'].quantile(${val})`,
+        targetCol: finalCol
+      };
+    } else {
+      const match = /^percentile_cont\((.*)\)$/i.exec(expr);
+      if (match) {
+        const inner = match[1].trim();
+        const params = splitSmart(inner, ",");
+        if (params.length > 0) {
+          const val = params[0].trim();
+          const colName = params[1] ? cleanFieldName(params[1]) : "campo";
+          const finalCol = alias || `quantile_${colName}`;
+          return {
+            original: selectExpr,
+            alias: finalCol,
+            pandasFormula: `df['${colName}'].quantile(${val})`,
+            targetCol: finalCol
+          };
+        }
+      }
+    }
+  }
+  
+  return null;
+}
+
 // Translation helpers for Pandas Filter Expressions with nested AND/OR operators translation
 export function translateWhereForPandas(whereStr: string): string {
   let clean = whereStr.trim();
@@ -818,6 +940,30 @@ export function translateSql(sql: string, targetLanguage: string): string {
     // Rule 2.3 - Temporary df assignment
     resultPandas += `\n# Atribuição simplificada\ndf = df_${mainTbl}\n\n`;
     
+    // Parse functions in select fields
+    const cleanSelFields: string[] = [];
+    const functionAssignments: string[] = [];
+    
+    for (const f of parsed.selectFields) {
+      const parts = f.split(/\s+as\s+/i);
+      const expr = parts[0].trim();
+      const alias = parts[1] ? parts[1].trim() : "";
+      
+      const translated = tryTranslateFunction(f);
+      if (translated) {
+        functionAssignments.push(`df['${translated.targetCol}'] = ${translated.pandasFormula}`);
+        cleanSelFields.push(translated.targetCol);
+      } else {
+        if (expr !== "*") {
+          cleanSelFields.push(alias || cleanFieldName(expr));
+        }
+      }
+    }
+    
+    if (functionAssignments.length > 0) {
+      resultPandas += `# Aplicações de funções do SELECT\n` + functionAssignments.join("\n") + "\n\n";
+    }
+    
     // Rule 2.4 - Chain DataFrame procedures
     let chain = "df";
     
@@ -827,10 +973,6 @@ export function translateSql(sql: string, targetLanguage: string): string {
     }
     
     // Fields lists
-    const cleanSelFields = parsed.selectFields
-      .map(f => cleanFieldName(f.split(/\s+as\s+/i)[0]))
-      .filter(f => f !== "*" && !f.includes("("));
-      
     if (cleanSelFields.length > 0) {
       const formattedSel = cleanSelFields.map(f => `'${f}'`).join(", ");
       chain += `[ [${formattedSel}] ]`;
