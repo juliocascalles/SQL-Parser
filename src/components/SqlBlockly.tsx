@@ -207,7 +207,7 @@ const BLOCKS_JSON = [
     ],
     "message1": "ELSE %1",
     "args1": [
-      { "type": "field_input", "name": "ELSE", "text": "0" }
+      { "type": "field_input", "name": "ELSE", "text": "" }
     ],
     "message2": "AS %1 %2",
     "args2": [
@@ -215,7 +215,7 @@ const BLOCKS_JSON = [
       { "type": "input_value", "name": "NEXT", "check": "SelectItem" }
     ],
     "inputsInline": false,
-    "output": "SelectItem",
+    "output": ["SelectItem", "Condition"],
     "colour": "#3b82f6",
     "tooltip": "Expressão condicional CASE que avalia condições",
     "helpUrl": ""
@@ -324,6 +324,10 @@ interface SqlBlocklyProps {
 export function parseConditionBlock(block: any): string {
   if (!block) return "";
   const type = block.type;
+
+  if (type === "sql_case_item") {
+    return buildCaseSqlExpression(block);
+  }
 
   if (type === "sql_subquery") {
     const field = block.getFieldValue("FIELD") || "";
@@ -485,9 +489,15 @@ export function buildWhenBranchesSql(block: any): string {
       }
     }
     const thenVal = block.getFieldValue("THEN") || "NULL";
-    let currentClause = `WHEN ${condStr || "1=1"} THEN ${thenVal}`;
     
     const nextBlock = block.getInputTargetBlock("NEXT");
+    if (nextBlock && nextBlock.type === "sql_case_item") {
+      const nestedCaseSql = buildCaseSqlExpression(nextBlock);
+      return `WHEN ${condStr || "1=1"} THEN ${nestedCaseSql}`;
+    }
+
+    let currentClause = `WHEN ${condStr || "1=1"} THEN ${thenVal}`;
+    
     if (nextBlock) {
       const nextClause = buildWhenBranchesSql(nextBlock);
       return `${currentClause} ${nextClause}`.trim();
@@ -507,9 +517,10 @@ export function buildCaseSqlExpression(block: any): string {
   }
   const whenBlock = block.getInputTargetBlock("WHEN");
   const whenPartsStr = buildWhenBranchesSql(whenBlock);
-  const elseVal = block.getFieldValue("ELSE") || "NULL";
+  const elseVal = (block.getFieldValue("ELSE") || "").trim();
+  const elseClause = elseVal ? ` ELSE ${elseVal}` : "";
   
-  return `CASE ${whenPartsStr ? whenPartsStr : "WHEN 1=1 THEN NULL"} ELSE ${elseVal} END`;
+  return `CASE ${whenPartsStr ? whenPartsStr : "WHEN 1=1 THEN NULL"}${elseClause} END`;
 }
 
 // Parse CASE SQL string expression and reconstruct Blockly blocks
@@ -542,7 +553,19 @@ export function buildCaseBlocksRecursively(expr: string, ws: any): any {
     whenBlock.initSvg();
     whenBlock.render();
 
-    whenBlock.setFieldValue(thenStr, "THEN");
+    let checkStr = thenStr;
+    if (checkStr.startsWith("(") && checkStr.endsWith(")")) {
+      checkStr = checkStr.slice(1, -1).trim();
+    }
+
+    if (checkStr.toUpperCase().startsWith("CASE ")) {
+      const nestedCase = buildCaseBlocksRecursively(checkStr, ws);
+      if (nestedCase && whenBlock.getInput("NEXT")?.connection) {
+        whenBlock.getInput("NEXT").connection.connect(nestedCase.outputConnection);
+      }
+    } else {
+      whenBlock.setFieldValue(thenStr, "THEN");
+    }
 
     if (whenStr) {
       const condBlock = buildWhereBlockRecursively(whenStr, ws);
@@ -555,7 +578,7 @@ export function buildCaseBlocksRecursively(expr: string, ws: any): any {
       firstWhenBlock = whenBlock;
     }
 
-    if (prevWhenBlock && prevWhenBlock.getInput("NEXT")?.connection) {
+    if (prevWhenBlock && prevWhenBlock.getInput("NEXT")?.connection && prevWhenBlock.getInputTargetBlock("NEXT") === null) {
       prevWhenBlock.getInput("NEXT").connection.connect(whenBlock.outputConnection);
     }
 
@@ -890,6 +913,11 @@ export function workspaceToSql(workspace: any): string {
 export function buildWhereBlockRecursively(whereStr: string, workspace: any): any {
   whereStr = whereStr.trim();
   if (!whereStr) return null;
+
+  if (/^CASE\b/i.test(whereStr)) {
+    const caseBlock = buildCaseBlocksRecursively(whereStr, workspace);
+    if (caseBlock) return caseBlock;
+  }
 
   // Stripping outer parentheses
   if (whereStr.startsWith("(") && whereStr.endsWith(")")) {
