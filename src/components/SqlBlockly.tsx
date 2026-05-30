@@ -1522,9 +1522,9 @@ export default function SqlBlockly({ onSqlChange, editorTriggerRef }: SqlBlockly
               <button
                 id="btn-add-orderby"
                 onClick={() => spawnBlock("sql_order_by_item")}
-                className="flex items-center justify-center gap-1.5 px-2.5 py-1 bg-white hover:bg-purple-100 text-purple-850 border border-purple-200 rounded-md text-xs font-semibold cursor-pointer active:scale-95 transition-all shadow-sm shrink-0"
+                className="flex items-center justify-center gap-1.5 px-2.5 py-1 bg-white hover:bg-purple-100 border border-purple-200 text-purple-700 rounded-md text-xs font-bold cursor-pointer active:scale-95 transition-all shadow-sm shrink-0"
               >
-                <ArrowDownAZ size={12} className="text-purple-500" />
+                <ArrowDownAZ size={12} className="text-purple-600" />
                 <span>+ ORDER BY</span>
               </button>
             </div>
