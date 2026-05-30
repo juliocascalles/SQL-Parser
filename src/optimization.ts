@@ -1,5 +1,5 @@
 import { parseSqlStringToData, ParsedSqlQuery, OrderByItem, splitSmart, JoinData } from "./parser";
-import { splitTopLevelJunction } from "./translate";
+import { splitTopLevelJunction, replaceCommentsWithSpaces } from "./translate";
 
 export interface ParsedCond {
   field: string;
@@ -99,18 +99,19 @@ export interface SubqueryMatch {
 // Walk through the WHERE clause and parse the subquery match safely returning balanced parentheses
 export function findSubquery(where: string): SubqueryMatch | null {
   if (!where) return null;
+  const cleanWhere = replaceCommentsWithSpaces(where);
   const regex = /\b([A-Za-z0-9_.-]+)\s+IN\s*\(\s*SELECT\b/gi;
   let match;
-  while ((match = regex.exec(where)) !== null) {
+  while ((match = regex.exec(cleanWhere)) !== null) {
     const field = match[1];
     const startIndex = match.index;
-    const firstOpenParenIndex = where.indexOf("(", startIndex);
+    const firstOpenParenIndex = cleanWhere.indexOf("(", startIndex);
     if (firstOpenParenIndex === -1) continue;
 
     let parenDepth = 1;
     let endIndex = -1;
-    for (let i = firstOpenParenIndex + 1; i < where.length; i++) {
-      const char = where[i];
+    for (let i = firstOpenParenIndex + 1; i < cleanWhere.length; i++) {
+      const char = cleanWhere[i];
       if (char === "(") parenDepth++;
       else if (char === ")") parenDepth--;
 
@@ -195,22 +196,14 @@ export function optimizeSubqueries(parsed: ParsedSqlQuery): ParsedSqlQuery {
       });
       currentParsed.joins.push(...subParsed.joins);
       
-      // Update where condition
-      const junction = splitTopLevelJunction(currentParsed.whereCondition);
-      if (junction.type) {
-        const newParts: string[] = [];
-        for (const part of junction.parts) {
-          if (part.includes(fullMatchString) || fullMatchString.includes(part)) {
-            continue;
-          }
-          newParts.push(part);
-        }
-        if (subParsed.whereCondition) {
-          newParts.push(subParsed.whereCondition);
-        }
-        currentParsed.whereCondition = newParts.join(` ${junction.type} `);
-      } else {
-        currentParsed.whereCondition = subParsed.whereCondition;
+      // Update where condition: replace the exact matched subquery with its internal conditions (or 1=1 if none)
+      const replacement = subParsed.whereCondition ? `(${subParsed.whereCondition})` : "1=1";
+      const idx = currentParsed.whereCondition.indexOf(fullMatchString);
+      if (idx !== -1) {
+        currentParsed.whereCondition = 
+          currentParsed.whereCondition.substring(0, idx) + 
+          replacement + 
+          currentParsed.whereCondition.substring(idx + fullMatchString.length);
       }
     } catch (err) {
       console.error("Subquery optimization error:", err);
@@ -349,7 +342,7 @@ export function optimizeCondition(condStr: string): string {
   // Split by top-level AND/OR junctions
   const junction = splitTopLevelJunction(clean);
   if (!junction.type) {
-    // Leaf node: Optimize Year filters inside single conditions
+    // Leaf node: Optimize Year filters inside single conditions (even if they contain comments)
     let leaf = optimizeYearFilter(clean);
     return hasOuterParens ? `(${leaf})` : leaf;
   }
@@ -414,13 +407,163 @@ export function optimizeCondition(condStr: string): string {
       finalParts.unshift(`${field} IN (${vals.join(", ")})`);
     }
     
-    const rebuilt = finalParts.join(" OR ");
+    const safeParts = finalParts.map(p => {
+      if (p.includes("--") && !p.endsWith("\n")) {
+        return p + "\n";
+      }
+      return p;
+    });
+    const rebuilt = safeParts.join(" OR ");
     return hasOuterParens ? `(${rebuilt})` : rebuilt;
   } else {
     // Junction type AND -> Join recursively optimized parts
-    const rebuilt = optimizedParts.join(" AND ");
+    const safeParts = optimizedParts.map(p => {
+      if (p.includes("--") && !p.endsWith("\n")) {
+        return p + "\n";
+      }
+      return p;
+    });
+    const rebuilt = safeParts.join(" AND ");
     return hasOuterParens ? `(${rebuilt})` : rebuilt;
   }
+}
+
+// Custom high-fidelity clause extractor that preserves original comments
+export function extractRawClausesWithComments(sql: string): Record<string, string> {
+  const keywords = [
+    { key: "SELECT", regex: /^SELECT\b/i },
+    { key: "FROM", regex: /^FROM\b/i },
+    { key: "WHERE", regex: /^WHERE\b/i },
+    { key: "GROUP BY", regex: /^GROUP\s+BY\b/i },
+    { key: "ORDER BY", regex: /^ORDER\s+BY\b/i },
+    { key: "LIMIT", regex: /^LIMIT\b/i }
+  ];
+
+  interface Match {
+    key: string;
+    index: number;
+    length: number;
+  }
+
+  const matches: Match[] = [];
+
+  let parenDepth = 0;
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+  let inBacktick = false;
+  let inSingleLineComment = false;
+  let inMultiLineComment = false;
+
+  for (let i = 0; i < sql.length; i++) {
+    const char = sql[i];
+
+    if (inSingleLineComment) {
+      if (char === "\n") {
+        inSingleLineComment = false;
+      }
+      continue;
+    }
+
+    if (inMultiLineComment) {
+      if (char === "*" && sql[i + 1] === "/") {
+        inMultiLineComment = false;
+        i++;
+      }
+      continue;
+    }
+
+    if (char === "\\" && (inSingleQuote || inDoubleQuote || inBacktick)) {
+      i++;
+      continue;
+    }
+
+    if (char === "'" && !inDoubleQuote && !inBacktick) {
+      inSingleQuote = !inSingleQuote;
+      continue;
+    }
+    if (char === '"' && !inSingleQuote && !inBacktick) {
+      inDoubleQuote = !inDoubleQuote;
+      continue;
+    }
+    if (char === "`" && !inSingleQuote && !inDoubleQuote) {
+      inBacktick = !inBacktick;
+      continue;
+    }
+
+    if (!inSingleQuote && !inDoubleQuote && !inBacktick) {
+      if (char === "/" && sql[i + 1] === "*") {
+        inMultiLineComment = true;
+        i++;
+        continue;
+      }
+      if (char === "-" && sql[i + 1] === "-") {
+        inSingleLineComment = true;
+        i++;
+        continue;
+      }
+
+      if (char === "(") {
+        parenDepth++;
+        continue;
+      }
+      if (char === ")") {
+        parenDepth--;
+        continue;
+      }
+
+      if (parenDepth === 0) {
+        const remaining = sql.substring(i);
+        let matchedKey = false;
+        let matchedLen = 0;
+        let keyName = "";
+
+        for (const kw of keywords) {
+          if (kw.regex.test(remaining)) {
+            const spacesMatch = kw.regex.exec(remaining);
+            if (spacesMatch) {
+              keyName = kw.key;
+              matchedLen = spacesMatch[0].length;
+              matchedKey = true;
+              break;
+            }
+          }
+        }
+
+        if (matchedKey) {
+          matches.push({ key: keyName, index: i, length: matchedLen });
+          i += matchedLen - 1;
+        }
+      }
+    }
+  }
+
+  // Sort matches by index
+  matches.sort((a, b) => a.index - b.index);
+
+  const rawClauses: Record<string, string> = {
+    SELECT: "",
+    FROM: "",
+    WHERE: "",
+    GROUP_BY: "",
+    ORDER_BY: "",
+    LIMIT: ""
+  };
+
+  for (let k = 0; k < matches.length; k++) {
+    const current = matches[k];
+    const valStart = current.index + current.length;
+    const valEnd = (k + 1 < matches.length) ? matches[k + 1].index : sql.length;
+    let snippet = sql.substring(valStart, valEnd).trim();
+
+    if (snippet.endsWith(";")) {
+      snippet = snippet.slice(0, -1).trim();
+    }
+
+    const dictKey = current.key.replace(" ", "_"); // GROUP BY -> GROUP_BY
+    rawClauses[dictKey] = snippet;
+  }
+
+  return rawClauses;
 }
 
 // Master Optimizer Function
@@ -430,10 +573,13 @@ export function optimizeSqlQuery(sql: string): string {
   try {
     let parsed = parseSqlStringToData(sql);
     
-    // 1. Convert subqueries to JOIN relations first
-    parsed = optimizeSubqueries(parsed);
+    // Load raw WHERE condition preserving comments
+    const rawClauses = extractRawClausesWithComments(sql);
+    if (rawClauses.WHERE) {
+      parsed.whereCondition = rawClauses.WHERE;
+    }
     
-    // 2. Run recursive condition optimizer on WHERE string and each JOIN's ON conditions
+    // 1. Run recursive condition optimizer on WHERE string and each JOIN's ON conditions first
     const optimizedWhere = parsed.whereCondition ? optimizeCondition(parsed.whereCondition) : "";
     
     const optimizedJoins = parsed.joins.map(join => {
@@ -450,8 +596,20 @@ export function optimizeSqlQuery(sql: string): string {
       joins: optimizedJoins
     };
 
-    // 3. Force append missing select fields referenced in ORDER BY and GROUP BY
+    // 2. Force append missing select fields referenced in ORDER BY and GROUP BY
     parsed = addMissingSelectFields(parsed);
+
+    // 3. Convert subqueries to JOIN relations LAST (as requested)
+    parsed = optimizeSubqueries(parsed);
+    
+    // Run condition optimization one last time on final where strings
+    if (parsed.whereCondition) {
+      parsed.whereCondition = optimizeCondition(parsed.whereCondition);
+    }
+    parsed.joins = parsed.joins.map(join => ({
+      ...join,
+      onCondition: join.onCondition ? optimizeCondition(join.onCondition) : ""
+    }));
 
     // Reconstruct the safe SQL Statement
     const selectClause = parsed.selectFields.length > 0 ? parsed.selectFields.join(", ") : "*";

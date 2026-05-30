@@ -260,10 +260,96 @@ export function stripOuterParens(str: string): string {
   return clean;
 }
 
+// Replace comments with space characters of the same length to preserve indices
+export function replaceCommentsWithSpaces(str: string): string {
+  let result = "";
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+  let inBacktick = false;
+  let inSingleLineComment = false;
+  let inMultiLineComment = false;
+
+  for (let i = 0; i < str.length; i++) {
+    const char = str[i];
+    
+    if (inSingleLineComment) {
+      if (char === "\n") {
+        inSingleLineComment = false;
+        result += "\n";
+      } else if (char === "\r") {
+        result += "\r";
+      } else {
+        result += " ";
+      }
+      continue;
+    }
+    
+    if (inMultiLineComment) {
+      if (char === "*" && str[i + 1] === "/") {
+        inMultiLineComment = false;
+        result += "  ";
+        i++;
+      } else if (char === "\n") {
+        result += "\n";
+      } else if (char === "\r") {
+        result += "\r";
+      } else {
+        result += " ";
+      }
+      continue;
+    }
+
+    if (char === "\\" && (inSingleQuote || inDoubleQuote || inBacktick)) {
+      result += char;
+      if (i + 1 < str.length) {
+        result += str[i + 1];
+        i++;
+      }
+      continue;
+    }
+
+    if (char === "'" && !inDoubleQuote && !inBacktick) {
+      inSingleQuote = !inSingleQuote;
+      result += char;
+      continue;
+    }
+    if (char === '"' && !inSingleQuote && !inBacktick) {
+      inDoubleQuote = !inDoubleQuote;
+      result += char;
+      continue;
+    }
+    if (char === "`" && !inSingleQuote && !inDoubleQuote) {
+      inBacktick = !inBacktick;
+      result += char;
+      continue;
+    }
+
+    if (!inSingleQuote && !inDoubleQuote && !inBacktick) {
+      if (char === "/" && str[i + 1] === "*") {
+        inMultiLineComment = true;
+        result += "  ";
+        i++;
+        continue;
+      }
+      if (char === "-" && str[i + 1] === "-") {
+        inSingleLineComment = true;
+        result += "  ";
+        i++;
+        continue;
+      }
+    }
+
+    result += char;
+  }
+  return result;
+}
+
 // Find top-level junctions and split SQL expressions
 export function splitTopLevelJunction(str: string): { parts: string[]; type: "AND" | "OR" | null } {
   const clean = str.trim();
   if (!clean) return { parts: [], type: null };
+
+  const cleanNoComments = replaceCommentsWithSpaces(clean);
 
   let parenDepth = 0;
   let inSingleQuote = false;
@@ -274,8 +360,8 @@ export function splitTopLevelJunction(str: string): { parts: string[]; type: "AN
   const orIndices: number[] = [];
   const andIndices: number[] = [];
 
-  for (let i = 0; i < clean.length; i++) {
-    const char = clean[i];
+  for (let i = 0; i < cleanNoComments.length; i++) {
+    const char = cleanNoComments[i];
     if (char === "\\" && (inSingleQuote || inDoubleQuote || inBacktick)) {
       i++;
       continue;
@@ -289,17 +375,21 @@ export function splitTopLevelJunction(str: string): { parts: string[]; type: "AN
 
       if (parenDepth === 0) {
         // Track BETWEEN to avoid splitting AND inside BETWEEN
-        const subBetween = clean.substring(i, i + 7).toUpperCase();
-        if (subBetween === "BETWEEN" && (i === 0 || !/[A-Za-z0-9_]/.test(clean[i - 1])) && (i + 7 === clean.length || !/[A-Za-z0-9_]/.test(clean[i + 7]))) {
+        const subBetween = cleanNoComments.substring(i, i + 7).toUpperCase();
+        if (subBetween === "BETWEEN" && (i === 0 || !/[A-Za-z0-9_]/.test(cleanNoComments[i - 1])) && (i + 7 === cleanNoComments.length || !/[A-Za-z0-9_]/.test(cleanNoComments[i + 7]))) {
           betweenCount++;
         }
 
         // Look for OR
-        if (clean.substring(i, i + 4).toUpperCase() === " OR " || clean.substring(i, i + 4).toUpperCase() === "\nOR " || clean.substring(i, i + 4).toUpperCase() === "\r\nOR ") {
+        if (cleanNoComments.substring(i, i + 2).toUpperCase() === "OR" &&
+            (i === 0 || !/[A-Za-z0-9_]/.test(cleanNoComments[i - 1])) &&
+            (i + 2 === cleanNoComments.length || !/[A-Za-z0-9_]/.test(cleanNoComments[i + 2]))) {
           orIndices.push(i);
         }
         // Look for AND
-        else if (clean.substring(i, i + 5).toUpperCase() === " AND " || clean.substring(i, i + 5).toUpperCase() === "\nAND " || clean.substring(i, i + 5).toUpperCase() === "\r\nAND ") {
+        else if (cleanNoComments.substring(i, i + 3).toUpperCase() === "AND" &&
+            (i === 0 || !/[A-Za-z0-9_]/.test(cleanNoComments[i - 1])) &&
+            (i + 3 === cleanNoComments.length || !/[A-Za-z0-9_]/.test(cleanNoComments[i + 3]))) {
           if (betweenCount > 0) {
             betweenCount--;
           } else {
@@ -315,14 +405,7 @@ export function splitTopLevelJunction(str: string): { parts: string[]; type: "AN
     let lastIndex = 0;
     for (const idx of orIndices) {
       parts.push(clean.substring(lastIndex, idx).trim());
-      const sub = clean.substring(idx, idx + 6);
-      if (sub.toUpperCase().startsWith("\r\nOR ")) {
-        lastIndex = idx + 5;
-      } else if (sub.toUpperCase().startsWith("\nOR ")) {
-        lastIndex = idx + 4;
-      } else {
-        lastIndex = idx + 4;
-      }
+      lastIndex = idx + 2;
     }
     parts.push(clean.substring(lastIndex).trim());
     return { parts, type: "OR" };
@@ -333,14 +416,7 @@ export function splitTopLevelJunction(str: string): { parts: string[]; type: "AN
     let lastIndex = 0;
     for (const idx of andIndices) {
       parts.push(clean.substring(lastIndex, idx).trim());
-      const sub = clean.substring(idx, idx + 7);
-      if (sub.toUpperCase().startsWith("\r\nAND ")) {
-        lastIndex = idx + 6;
-      } else if (sub.toUpperCase().startsWith("\nAND ")) {
-        lastIndex = idx + 5;
-      } else {
-        lastIndex = idx + 5;
-      }
+      lastIndex = idx + 3;
     }
     parts.push(clean.substring(lastIndex).trim());
     return { parts, type: "AND" };

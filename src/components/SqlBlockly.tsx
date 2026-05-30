@@ -198,6 +198,27 @@ const BLOCKS_JSON = [
     "colour": "#10b981",
     "tooltip": "Combina duas condições com operador lógico OR",
     "helpUrl": ""
+  },
+  {
+    "type": "sql_case_item",
+    "message0": "CASE WHEN %1 THEN %2",
+    "args0": [
+      { "type": "input_value", "name": "WHEN", "check": "Condition" },
+      { "type": "field_input", "name": "THEN", "text": "value" }
+    ],
+    "message1": "ELSE / NEXT CASE %1",
+    "args1": [
+      { "type": "input_value", "name": "ELSE", "check": ["SelectItem", "CaseItem"] }
+    ],
+    "message2": "AS %1 %2",
+    "args2": [
+      { "type": "field_input", "name": "ALIAS", "text": "result" },
+      { "type": "input_value", "name": "NEXT", "check": "SelectItem" }
+    ],
+    "output": "SelectItem",
+    "colour": "#3b82f6",
+    "tooltip": "Expressão condicional CASE que avalia condições",
+    "helpUrl": ""
   }
 ];
 
@@ -222,6 +243,7 @@ const TOOLBOX_XML = `
     <category name="Campos" colour="160">
       <block type="sql_select_item"></block>
       <block type="sql_function_item"></block>
+      <block type="sql_case_item"></block>
     </category>
     <category name="Tabelas" colour="330">
       <block type="sql_table_item"></block>
@@ -292,6 +314,140 @@ export function parseConditionBlock(block: any): string {
   return "";
 }
 
+// Translate CASE block structure recursively
+export function buildCaseSqlExpression(block: any): string {
+  if (!block) return "NULL";
+  if (block.type !== "sql_case_item") {
+    if (block.type === "sql_select_item") {
+      return block.getFieldValue("FIELD_NAME") || "NULL";
+    }
+    return "NULL";
+  }
+  const whenBlock = block.getInputTargetBlock("WHEN");
+  const whenStr = parseConditionBlock(whenBlock) || "1=1";
+  const thenVal = block.getFieldValue("THEN") || "NULL";
+  const elseBlock = block.getInputTargetBlock("ELSE");
+  
+  let elseStr = "NULL";
+  if (elseBlock) {
+    if (elseBlock.type === "sql_case_item") {
+      elseStr = buildCaseSqlExpression(elseBlock);
+    } else if (elseBlock.type === "sql_select_item") {
+      elseStr = elseBlock.getFieldValue("FIELD_NAME") || "NULL";
+    } else {
+      elseStr = "NULL";
+    }
+  }
+  
+  return `CASE WHEN ${whenStr} THEN ${thenVal} ELSE ${elseStr} END`;
+}
+
+// Parse CASE SQL string expression and reconstruct Blockly blocks
+export function buildCaseBlocksRecursively(expr: string, ws: any): any {
+  const clean = expr.trim();
+  if (!clean.toUpperCase().startsWith("CASE ")) return null;
+  
+  let parenDepth = 0;
+  let caseDepth = 0;
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+  
+  let whenIdx = -1;
+  let thenIdx = -1;
+  let elseIdx = -1;
+  let endIdx = -1;
+  
+  const upper = clean.toUpperCase();
+  for (let i = 0; i < upper.length; i++) {
+    const char = clean[i];
+    if (char === "\\" && (inSingleQuote || inDoubleQuote)) {
+      i++;
+      continue;
+    }
+    if (char === "'" && !inDoubleQuote) {
+      inSingleQuote = !inSingleQuote;
+      continue;
+    }
+    if (char === '"' && !inSingleQuote) {
+      inDoubleQuote = !inDoubleQuote;
+      continue;
+    }
+    if (inSingleQuote || inDoubleQuote) continue;
+    
+    if (char === "(") parenDepth++;
+    else if (char === ")") parenDepth--;
+    
+    if (parenDepth === 0) {
+      if (upper.substring(i, i + 5) === "CASE " && (i === 0 || !/[A-Za-z0-9_]/.test(clean[i - 1]))) {
+        caseDepth++;
+      }
+      else if (upper.substring(i, i + 3) === "END" && (i + 3 === upper.length || !/[A-Za-z0-9_]/.test(clean[i + 3]))) {
+        caseDepth--;
+        if (caseDepth === 0) {
+          endIdx = i;
+        }
+      }
+      else if (caseDepth === 1) {
+        if (upper.substring(i, i + 5) === "WHEN " && (i === 0 || !/[A-Za-z0-9_]/.test(clean[i - 1]))) {
+          if (whenIdx === -1) whenIdx = i;
+        }
+        else if (upper.substring(i, i + 5) === "THEN " && (i === 0 || !/[A-Za-z0-9_]/.test(clean[i - 1]))) {
+          if (thenIdx === -1) thenIdx = i;
+        }
+        else if (upper.substring(i, i + 5) === "ELSE " && (i === 0 || !/[A-Za-z0-9_]/.test(clean[i - 1]))) {
+          if (elseIdx === -1) elseIdx = i;
+        }
+      }
+    }
+  }
+  
+  if (whenIdx !== -1 && thenIdx !== -1) {
+    const whenStr = clean.substring(whenIdx + 5, thenIdx).trim();
+    let thenStr = "";
+    let elseStr = "";
+    if (elseIdx !== -1) {
+      thenStr = clean.substring(thenIdx + 5, elseIdx).trim();
+      elseStr = clean.substring(elseIdx + 5, endIdx).trim();
+    } else {
+      thenStr = clean.substring(thenIdx + 5, endIdx).trim();
+    }
+    
+    const block = ws.newBlock("sql_case_item");
+    block.initSvg();
+    block.render();
+    
+    block.setFieldValue(thenStr, "THEN");
+    
+    if (whenStr) {
+      const whenBlock = buildWhereBlockRecursively(whenStr, ws);
+      if (whenBlock && block.getInput("WHEN")?.connection) {
+        block.getInput("WHEN").connection.connect(whenBlock.outputConnection);
+      }
+    }
+    
+    if (elseStr) {
+      if (elseStr.toUpperCase().startsWith("CASE ")) {
+        const nestedBlock = buildCaseBlocksRecursively(elseStr, ws);
+        if (nestedBlock && block.getInput("ELSE")?.connection) {
+          block.getInput("ELSE").connection.connect(nestedBlock.outputConnection);
+        }
+      } else if (elseStr !== "NULL" && elseStr !== "") {
+        const selectItemBlock = ws.newBlock("sql_select_item");
+        selectItemBlock.initSvg();
+        selectItemBlock.render();
+        selectItemBlock.setFieldValue(elseStr, "FIELD_NAME");
+        if (block.getInput("ELSE")?.connection) {
+          block.getInput("ELSE").connection.connect(selectItemBlock.outputConnection);
+        }
+      }
+    }
+    
+    return block;
+  }
+  
+  return null;
+}
+
 // Compiles the entire visual tree of blocks into a clean SQL string
 export function workspaceToSql(workspace: any): string {
   const allBlocks = workspace.getTopBlocks(true);
@@ -316,6 +472,15 @@ export function workspaceToSql(workspace: any): string {
       const param = fieldBlock.getFieldValue("PARAM")?.trim() || "*";
       const alias = fieldBlock.getFieldValue("ALIAS")?.trim() || "";
       let expr = `${func}(${param})`;
+      if (alias) {
+        expr += ` AS ${alias}`;
+      }
+      fieldsArray.push(expr);
+      fieldBlock = fieldBlock.getInputTargetBlock("NEXT");
+    } else if (fieldBlock.type === "sql_case_item") {
+      const caseExpr = buildCaseSqlExpression(fieldBlock);
+      const alias = fieldBlock.getFieldValue("ALIAS")?.trim() || "";
+      let expr = caseExpr;
       if (alias) {
         expr += ` AS ${alias}`;
       }
@@ -704,6 +869,34 @@ export default function SqlBlockly({ onSqlChange, editorTriggerRef }: SqlBlockly
               parentInputConnection.connect(selectItemBlock.outputConnection);
               parentInputConnection = selectItemBlock.getInput("NEXT")?.connection;
             }
+          } else if (cleanField.toUpperCase().startsWith("CASE ")) {
+            let alias = "";
+            let remaining = cleanField;
+            const aliasMatch = /\s+AS\s+([A-Za-z0-9_]+)$/i.exec(cleanField);
+            if (aliasMatch) {
+              alias = aliasMatch[1].trim();
+              remaining = cleanField.substring(0, aliasMatch.index).trim();
+            } else {
+              const lastSpaceIdx = cleanField.lastIndexOf(" ");
+              if (lastSpaceIdx !== -1) {
+                const potentialAlias = cleanField.substring(lastSpaceIdx + 1).trim();
+                const preceding = cleanField.substring(0, lastSpaceIdx).trim();
+                if (/^[A-Za-z0-9_]+$/.test(potentialAlias) && preceding.toUpperCase().endsWith("END")) {
+                  alias = potentialAlias;
+                  remaining = preceding;
+                }
+              }
+            }
+            const caseBlock = buildCaseBlocksRecursively(remaining, ws);
+            if (caseBlock) {
+              if (alias) {
+                caseBlock.setFieldValue(alias, "ALIAS");
+              }
+              if (parentInputConnection && caseBlock.outputConnection) {
+                parentInputConnection.connect(caseBlock.outputConnection);
+                parentInputConnection = caseBlock.getInput("NEXT")?.connection;
+              }
+            }
           } else {
             const selectItemBlock = ws.newBlock("sql_select_item");
             selectItemBlock.initSvg();
@@ -1055,6 +1248,13 @@ export default function SqlBlockly({ onSqlChange, editorTriggerRef }: SqlBlockly
                 className="flex items-center justify-center gap-1.5 px-2.5 py-1 bg-white hover:bg-cyan-100 text-cyan-800 border border-cyan-200 rounded-md text-xs font-semibold cursor-pointer active:scale-95 transition-all shadow-sm shrink-0"
               >
                 <span>+ Função</span>
+              </button>
+              <button
+                id="btn-add-case"
+                onClick={() => spawnBlock("sql_case_item")}
+                className="flex items-center justify-center gap-1.5 px-2.5 py-1 bg-white hover:bg-cyan-100 text-cyan-800 border border-cyan-200 rounded-md text-xs font-semibold cursor-pointer active:scale-95 transition-all shadow-sm shrink-0"
+              >
+                <span>+ CASE</span>
               </button>
             </div>
           </div>
