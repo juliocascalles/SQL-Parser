@@ -33,6 +33,231 @@ export function stripOuterParens(str: string): string {
   return clean;
 }
 
+// Helper to find the top level operator (e.g. =, >, <, >=, <=, !=, <>) outside of parentheses and quotes
+export function findTopLevelOperator(str: string): { op: string, index: number } | null {
+  const operators = [">=", "<=", "!=", "<>", "=", ">", "<"]; // order matches larger length operators first
+  let parenDepth = 0;
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+
+  for (let i = 0; i < str.length; i++) {
+    const char = str[i];
+    if (char === "(") {
+      parenDepth++;
+      continue;
+    }
+    if (char === ")") {
+      parenDepth--;
+      continue;
+    }
+    if (char === "'") {
+      inSingleQuote = !inSingleQuote;
+      continue;
+    }
+    if (char === '"') {
+      inDoubleQuote = !inDoubleQuote;
+      continue;
+    }
+
+    if (parenDepth === 0 && !inSingleQuote && !inDoubleQuote) {
+      const remaining = str.substring(i);
+      for (const op of operators) {
+        if (remaining.startsWith(op)) {
+          return { op, index: i };
+        }
+      }
+    }
+  }
+  return null;
+}
+
+// Get the single variable/field name in an expression if it has exactly one unique variable
+export function getSingleVariable(expr: string): string | null {
+  // Strip out numeric values first to avoid confusing dot in floats with dots in table aliases
+  const cleanExpr = expr.replace(/\b\d+(?:\.\d+)?\b/g, " ").replace(/\b\.\d+\b/g, " ");
+  // Match word characters representing variables (like field names: a.field, field etc.)
+  const words = cleanExpr.match(/\b[A-Za-z_][A-Za-z0-9_.]*\b/g) || [];
+  
+  const ignored = new Set(["and", "or", "not", "in", "like", "between", "is", "null", "year", "month", "day", "date", "as"]);
+  const varsObj = new Set<string>();
+  for (const word of words) {
+    if (!ignored.has(word.toLowerCase())) {
+      varsObj.add(word);
+    }
+  }
+  if (varsObj.size === 1) {
+    return Array.from(varsObj)[0];
+  }
+  return null;
+}
+
+// Safely replaces the occurrences of the exact variable name with a number value in expression
+export function replaceVariable(expr: string, variableName: string, val: number): string {
+  const escaped = variableName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+  const regex = new RegExp(`(?<![A-Za-z0-9_.])${escaped}(?![A-Za-z0-9_.])`, 'g');
+  return expr.replace(regex, val.toString());
+}
+
+// Check if string contains ONLY algebraic operations, numbers, brackets and spaces
+export function isPureMathExpr(str: string): boolean {
+  return /^[0-9.+\-*/()\s]+$/.test(str);
+}
+
+// Safe recursive descent math evaluator to safely evaluate arithmetic expression string (without eval)
+export function safeEval(str: string): number {
+  const tokens = str.match(/\d+(?:\.\d+)?|\.\d+|[-+*/()]/g) || [];
+  let pos = 0;
+
+  function parsePrimary(): number {
+    let token = tokens[pos];
+    if (token === "-") {
+      pos++;
+      return -parsePrimary();
+    }
+    if (token === "+") {
+      pos++;
+      return parsePrimary();
+    }
+    if (token === "(") {
+      pos++;
+      const val = parseExpr();
+      if (tokens[pos] === ")") {
+        pos++;
+      }
+      return val;
+    }
+    pos++;
+    return parseFloat(token || "0");
+  }
+
+  function parseMultiplicative(): number {
+    let val = parsePrimary();
+    while (tokens[pos] === "*" || tokens[pos] === "/") {
+      const op = tokens[pos];
+      pos++;
+      const nextVal = parsePrimary();
+      if (op === "*") {
+        val *= nextVal;
+      } else {
+        val /= nextVal;
+      }
+    }
+    return val;
+  }
+
+  function parseExpr(): number {
+    let val = parseMultiplicative();
+    while (tokens[pos] === "+" || tokens[pos] === "-") {
+      const op = tokens[pos];
+      pos++;
+      const nextVal = parseMultiplicative();
+      if (op === "+") {
+        val += nextVal;
+      } else {
+        val -= nextVal;
+      }
+    }
+    return val;
+  }
+
+  return parseExpr();
+}
+
+// Helper to flip the comparison operator around
+export function flipOperator(op: string): string {
+  if (op === ">") return "<";
+  if (op === "<") return ">";
+  if (op === ">=") return "<=";
+  if (op === "<=") return ">=";
+  return op;
+}
+
+// Format number into clean representation preserving clean integers and reasonably rounded floats
+export function formatConst(n: number): string {
+  const fixed = Number(n.toFixed(6));
+  return fixed.toString();
+}
+
+// Main helper to optimize single leaf conditions with linear expressions on single variables
+export function optimizeLeafArithmetic(leaf: string): string {
+  const clean = stripOuterParens(leaf).trim();
+  const match = findTopLevelOperator(clean);
+  if (!match) return leaf;
+
+  let { op, index } = match;
+  let leftExpr = clean.substring(0, index).trim();
+  let rightExpr = clean.substring(index + op.length).trim();
+
+  // If there are comments inside, skip optimizing
+  if (leftExpr.includes("--") || leftExpr.includes("/*") || rightExpr.includes("--") || rightExpr.includes("/*")) {
+    return leaf;
+  }
+
+  const leftVar = getSingleVariable(leftExpr);
+  const rightVar = getSingleVariable(rightExpr);
+
+  let varName: string;
+  let varOnLeft: boolean;
+
+  if (leftVar !== null && rightVar === null) {
+    varName = leftVar;
+    varOnLeft = true;
+  } else if (rightVar !== null && leftVar === null) {
+    varName = rightVar;
+    varOnLeft = false;
+  } else {
+    return leaf;
+  }
+
+  if (!varOnLeft) {
+    const temp = leftExpr;
+    leftExpr = rightExpr;
+    rightExpr = temp;
+    op = flipOperator(op);
+  }
+
+  if (!isPureMathExpr(rightExpr)) {
+    return leaf;
+  }
+
+  // Substitutes the variable with 0 in the left expression to ensure it is clean math
+  const leftSub0 = replaceVariable(leftExpr, varName, 0);
+  if (!isPureMathExpr(leftSub0)) {
+    return leaf;
+  }
+
+  try {
+    const C = safeEval(rightExpr);
+    const L0 = safeEval(leftSub0);
+    const L1 = safeEval(replaceVariable(leftExpr, varName, 1));
+    const L2 = safeEval(replaceVariable(leftExpr, varName, 2));
+
+    const B = L0;
+    const A = L1 - L0;
+
+    // Linear equation check: L(2) must equal 2 * A + B
+    if (Math.abs(L2 - (2 * A + B)) > 1e-9) {
+      return leaf;
+    }
+
+    if (Math.abs(A) < 1e-9) {
+      return leaf;
+    }
+
+    const newVal = (C - B) / A;
+    let finalOp = op;
+    if (A < 0) {
+      finalOp = flipOperator(op);
+    }
+
+    const newValStr = formatConst(newVal);
+    return `${varName} ${finalOp} ${newValStr}`;
+  } catch (err) {
+    console.error("Leaf arithmetic optimization error:", err);
+    return leaf;
+  }
+}
+
 // Parse a clean filter expression part into a Field, Operator, and Values structure
 export function tryParseSimpleFilter(part: string): ParsedCond | null {
   const clean = stripOuterParens(part);
@@ -342,8 +567,9 @@ export function optimizeCondition(condStr: string): string {
   // Split by top-level AND/OR junctions
   const junction = splitTopLevelJunction(clean);
   if (!junction.type) {
-    // Leaf node: Optimize Year filters inside single conditions (even if they contain comments)
-    let leaf = optimizeYearFilter(clean);
+    // Leaf node: Optimize arithmetic and Year filters inside single conditions
+    let leaf = optimizeLeafArithmetic(clean);
+    leaf = optimizeYearFilter(leaf);
     return hasOuterParens ? `(${leaf})` : leaf;
   }
   
