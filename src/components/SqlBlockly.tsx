@@ -201,23 +201,40 @@ const BLOCKS_JSON = [
   },
   {
     "type": "sql_case_item",
-    "message0": "CASE WHEN %1 THEN %2",
+    "message0": "CASE %1",
     "args0": [
-      { "type": "input_value", "name": "WHEN", "check": "Condition" },
-      { "type": "field_input", "name": "THEN", "text": "value" }
+      { "type": "input_value", "name": "WHEN", "check": ["Condition", "CaseWhen"] }
     ],
-    "message1": "ELSE / NEXT CASE %1",
+    "message1": "ELSE %1",
     "args1": [
-      { "type": "input_value", "name": "ELSE", "check": ["SelectItem", "CaseItem"] }
+      { "type": "field_input", "name": "ELSE", "text": "0" }
     ],
     "message2": "AS %1 %2",
     "args2": [
       { "type": "field_input", "name": "ALIAS", "text": "result" },
       { "type": "input_value", "name": "NEXT", "check": "SelectItem" }
     ],
+    "inputsInline": false,
     "output": "SelectItem",
     "colour": "#3b82f6",
     "tooltip": "Expressão condicional CASE que avalia condições",
+    "helpUrl": ""
+  },
+  {
+    "type": "sql_when_item",
+    "message0": "WHEN %1 THEN %2",
+    "args0": [
+      { "type": "input_value", "name": "WHEN", "check": ["Condition", "CaseWhen"] },
+      { "type": "field_input", "name": "THEN", "text": "value" }
+    ],
+    "message1": "NEXT %1",
+    "args1": [
+      { "type": "input_value", "name": "NEXT", "check": ["Condition", "CaseWhen"] }
+    ],
+    "inputsInline": false,
+    "output": "CaseWhen",
+    "colour": "#3b82f6",
+    "tooltip": "Cláusula WHEN ... THEN de uma expressão condicional CASE",
     "helpUrl": ""
   },
   {
@@ -277,6 +294,7 @@ const TOOLBOX_XML = `
       <block type="sql_select_item"></block>
       <block type="sql_function_item"></block>
       <block type="sql_case_item"></block>
+      <block type="sql_when_item"></block>
     </category>
     <category name="Tabelas" colour="330">
       <block type="sql_table_item"></block>
@@ -356,50 +374,28 @@ export function parseConditionBlock(block: any): string {
 }
 
 // Translate CASE block structure recursively
-export function buildCaseSqlExpression(block: any): string {
-  if (!block) return "NULL";
-  if (block.type !== "sql_case_item") {
-    if (block.type === "sql_select_item") {
-      return block.getFieldValue("FIELD_NAME") || "NULL";
-    }
-    return "NULL";
-  }
-  const whenBlock = block.getInputTargetBlock("WHEN");
-  const whenStr = parseConditionBlock(whenBlock) || "1=1";
-  const thenVal = block.getFieldValue("THEN") || "NULL";
-  const elseBlock = block.getInputTargetBlock("ELSE");
-  
-  let elseStr = "NULL";
-  if (elseBlock) {
-    if (elseBlock.type === "sql_case_item") {
-      elseStr = buildCaseSqlExpression(elseBlock);
-    } else if (elseBlock.type === "sql_select_item") {
-      elseStr = elseBlock.getFieldValue("FIELD_NAME") || "NULL";
-    } else {
-      elseStr = "NULL";
-    }
-  }
-  
-  return `CASE WHEN ${whenStr} THEN ${thenVal} ELSE ${elseStr} END`;
+interface WhenThen {
+  whenIdx: number;
+  thenIdx: number;
+  endIdx: number;
 }
 
-// Parse CASE SQL string expression and reconstruct Blockly blocks
-export function buildCaseBlocksRecursively(expr: string, ws: any): any {
-  const clean = expr.trim();
-  if (!clean.toUpperCase().startsWith("CASE ")) return null;
-  
+export function parseCaseExpression(clean: string) {
+  const upper = clean.toUpperCase();
+  if (!upper.startsWith("CASE ")) return null;
+
   let parenDepth = 0;
   let caseDepth = 0;
   let inSingleQuote = false;
   let inDoubleQuote = false;
-  
-  let whenIdx = -1;
-  let thenIdx = -1;
+
+  const whenThens: WhenThen[] = [];
+  let currentWhenIdx = -1;
+  let currentThenIdx = -1;
   let elseIdx = -1;
-  let endIdx = -1;
-  
-  const upper = clean.toUpperCase();
-  for (let i = 0; i < upper.length; i++) {
+  let finalEndIdx = -1;
+
+  for (let i = 0; i < clean.length; i++) {
     const char = clean[i];
     if (char === "\\" && (inSingleQuote || inDoubleQuote)) {
       i++;
@@ -414,10 +410,10 @@ export function buildCaseBlocksRecursively(expr: string, ws: any): any {
       continue;
     }
     if (inSingleQuote || inDoubleQuote) continue;
-    
+
     if (char === "(") parenDepth++;
     else if (char === ")") parenDepth--;
-    
+
     if (parenDepth === 0) {
       if (upper.substring(i, i + 5) === "CASE " && (i === 0 || !/[A-Za-z0-9_]/.test(clean[i - 1]))) {
         caseDepth++;
@@ -425,68 +421,152 @@ export function buildCaseBlocksRecursively(expr: string, ws: any): any {
       else if (upper.substring(i, i + 3) === "END" && (i + 3 === upper.length || !/[A-Za-z0-9_]/.test(clean[i + 3]))) {
         caseDepth--;
         if (caseDepth === 0) {
-          endIdx = i;
+          finalEndIdx = i;
+          if (elseIdx !== -1) {
+            // Captured else block up to finalEndIdx
+          } else if (currentThenIdx !== -1) {
+            whenThens.push({
+              whenIdx: currentWhenIdx,
+              thenIdx: currentThenIdx,
+              endIdx: finalEndIdx
+            });
+          }
+          break;
         }
       }
-      else if (caseDepth === 1) {
+      
+      if (caseDepth === 1) {
         if (upper.substring(i, i + 5) === "WHEN " && (i === 0 || !/[A-Za-z0-9_]/.test(clean[i - 1]))) {
-          if (whenIdx === -1) whenIdx = i;
+          if (currentThenIdx !== -1) {
+            whenThens.push({
+              whenIdx: currentWhenIdx,
+              thenIdx: currentThenIdx,
+              endIdx: i
+            });
+            currentThenIdx = -1;
+          }
+          currentWhenIdx = i;
         }
         else if (upper.substring(i, i + 5) === "THEN " && (i === 0 || !/[A-Za-z0-9_]/.test(clean[i - 1]))) {
-          if (thenIdx === -1) thenIdx = i;
+          currentThenIdx = i;
         }
         else if (upper.substring(i, i + 5) === "ELSE " && (i === 0 || !/[A-Za-z0-9_]/.test(clean[i - 1]))) {
-          if (elseIdx === -1) elseIdx = i;
+          if (currentThenIdx !== -1) {
+            whenThens.push({
+              whenIdx: currentWhenIdx,
+              thenIdx: currentThenIdx,
+              endIdx: i
+            });
+            currentThenIdx = -1;
+          }
+          elseIdx = i;
         }
       }
     }
   }
-  
-  if (whenIdx !== -1 && thenIdx !== -1) {
-    const whenStr = clean.substring(whenIdx + 5, thenIdx).trim();
-    let thenStr = "";
-    let elseStr = "";
-    if (elseIdx !== -1) {
-      thenStr = clean.substring(thenIdx + 5, elseIdx).trim();
-      elseStr = clean.substring(elseIdx + 5, endIdx).trim();
-    } else {
-      thenStr = clean.substring(thenIdx + 5, endIdx).trim();
-    }
-    
-    const block = ws.newBlock("sql_case_item");
-    block.initSvg();
-    block.render();
-    
-    block.setFieldValue(thenStr, "THEN");
-    
-    if (whenStr) {
-      const whenBlock = buildWhereBlockRecursively(whenStr, ws);
-      if (whenBlock && block.getInput("WHEN")?.connection) {
-        block.getInput("WHEN").connection.connect(whenBlock.outputConnection);
+
+  return {
+    whenThens,
+    elseIdx,
+    finalEndIdx
+  };
+}
+
+export function buildWhenBranchesSql(block: any): string {
+  if (!block) return "";
+  if (block.type === "sql_when_item") {
+    const condBlock = block.getInputTargetBlock("WHEN");
+    let condStr = "";
+    if (condBlock) {
+      if (condBlock.type === "sql_when_item") {
+        condStr = buildWhenBranchesSql(condBlock);
+      } else {
+        condStr = parseConditionBlock(condBlock);
       }
     }
+    const thenVal = block.getFieldValue("THEN") || "NULL";
+    let currentClause = `WHEN ${condStr || "1=1"} THEN ${thenVal}`;
     
+    const nextBlock = block.getInputTargetBlock("NEXT");
+    if (nextBlock) {
+      const nextClause = buildWhenBranchesSql(nextBlock);
+      return `${currentClause} ${nextClause}`.trim();
+    }
+    return currentClause;
+  }
+  return "";
+}
+
+export function buildCaseSqlExpression(block: any): string {
+  if (!block) return "NULL";
+  if (block.type !== "sql_case_item") {
+    if (block.type === "sql_select_item") {
+      return block.getFieldValue("FIELD_NAME") || "NULL";
+    }
+    return "NULL";
+  }
+  const whenBlock = block.getInputTargetBlock("WHEN");
+  const whenPartsStr = buildWhenBranchesSql(whenBlock);
+  const elseVal = block.getFieldValue("ELSE") || "NULL";
+  
+  return `CASE ${whenPartsStr ? whenPartsStr : "WHEN 1=1 THEN NULL"} ELSE ${elseVal} END`;
+}
+
+// Parse CASE SQL string expression and reconstruct Blockly blocks
+export function buildCaseBlocksRecursively(expr: string, ws: any): any {
+  const clean = expr.trim();
+  const parsed = parseCaseExpression(clean);
+  if (!parsed || parsed.finalEndIdx === -1) return null;
+
+  const { whenThens, elseIdx, finalEndIdx } = parsed;
+
+  const caseBlock = ws.newBlock("sql_case_item");
+  caseBlock.initSvg();
+  caseBlock.render();
+
+  if (elseIdx !== -1) {
+    const elseStr = clean.substring(elseIdx + 5, finalEndIdx).trim();
     if (elseStr) {
-      if (elseStr.toUpperCase().startsWith("CASE ")) {
-        const nestedBlock = buildCaseBlocksRecursively(elseStr, ws);
-        if (nestedBlock && block.getInput("ELSE")?.connection) {
-          block.getInput("ELSE").connection.connect(nestedBlock.outputConnection);
-        }
-      } else if (elseStr !== "NULL" && elseStr !== "") {
-        const selectItemBlock = ws.newBlock("sql_select_item");
-        selectItemBlock.initSvg();
-        selectItemBlock.render();
-        selectItemBlock.setFieldValue(elseStr, "FIELD_NAME");
-        if (block.getInput("ELSE")?.connection) {
-          block.getInput("ELSE").connection.connect(selectItemBlock.outputConnection);
-        }
+      caseBlock.setFieldValue(elseStr, "ELSE");
+    }
+  }
+
+  let firstWhenBlock: any = null;
+  let prevWhenBlock: any = null;
+
+  for (const wt of whenThens) {
+    const whenStr = clean.substring(wt.whenIdx + 5, wt.thenIdx).trim();
+    const thenStr = clean.substring(wt.thenIdx + 5, wt.endIdx).trim();
+
+    const whenBlock = ws.newBlock("sql_when_item");
+    whenBlock.initSvg();
+    whenBlock.render();
+
+    whenBlock.setFieldValue(thenStr, "THEN");
+
+    if (whenStr) {
+      const condBlock = buildWhereBlockRecursively(whenStr, ws);
+      if (condBlock && whenBlock.getInput("WHEN")?.connection) {
+        whenBlock.getInput("WHEN").connection.connect(condBlock.outputConnection);
       }
     }
-    
-    return block;
+
+    if (!firstWhenBlock) {
+      firstWhenBlock = whenBlock;
+    }
+
+    if (prevWhenBlock && prevWhenBlock.getInput("NEXT")?.connection) {
+      prevWhenBlock.getInput("NEXT").connection.connect(whenBlock.outputConnection);
+    }
+
+    prevWhenBlock = whenBlock;
   }
-  
-  return null;
+
+  if (firstWhenBlock && caseBlock.getInput("WHEN")?.connection) {
+    caseBlock.getInput("WHEN").connection.connect(firstWhenBlock.outputConnection);
+  }
+
+  return caseBlock;
 }
 
 // Compiles a single query block (top query or nested subquery) into SQL
@@ -1328,6 +1408,13 @@ export default function SqlBlockly({ onSqlChange, editorTriggerRef }: SqlBlockly
                 className="flex items-center justify-center gap-1.5 px-2.5 py-1 bg-white hover:bg-cyan-100 text-cyan-800 border border-cyan-200 rounded-md text-xs font-semibold cursor-pointer active:scale-95 transition-all shadow-sm shrink-0"
               >
                 <span>+ CASE</span>
+              </button>
+              <button
+                id="btn-add-when"
+                onClick={() => spawnBlock("sql_when_item")}
+                className="flex items-center justify-center gap-1.5 px-2.5 py-1 bg-white hover:bg-cyan-100 text-cyan-800 border border-cyan-200 rounded-md text-xs font-semibold cursor-pointer active:scale-95 transition-all shadow-sm shrink-0"
+              >
+                <span>+ WHEN</span>
               </button>
             </div>
           </div>
