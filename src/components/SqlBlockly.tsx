@@ -219,6 +219,39 @@ const BLOCKS_JSON = [
     "colour": "#3b82f6",
     "tooltip": "Expressão condicional CASE que avalia condições",
     "helpUrl": ""
+  },
+  {
+    "type": "sql_subquery",
+    "message0": "SUBQUERY: %1 IN ( SELECT %2 )",
+    "args0": [
+      { "type": "field_input", "name": "FIELD", "text": "id" },
+      { "type": "input_value", "name": "FIELDS", "check": "SelectItem" }
+    ],
+    "message1": "FROM %1",
+    "args1": [
+      { "type": "input_value", "name": "TABLES", "check": "TableOrJoin" }
+    ],
+    "message2": "WHERE %1",
+    "args2": [
+      { "type": "input_value", "name": "WHERE", "check": "Condition" }
+    ],
+    "message3": "GROUP BY %1",
+    "args3": [
+      { "type": "input_value", "name": "GROUP_BY", "check": "GroupByItem" }
+    ],
+    "message4": "ORDER BY %1",
+    "args4": [
+      { "type": "input_value", "name": "ORDER_BY", "check": "OrderItem" }
+    ],
+    "message5": "LIMIT %1",
+    "args5": [
+      { "type": "field_input", "name": "LIMIT", "text": "" }
+    ],
+    "inputsInline": false,
+    "output": "Condition",
+    "colour": "#065f46",
+    "tooltip": "Subquery SQL no WHERE: campo IN (SELECT...)",
+    "helpUrl": ""
   }
 ];
 
@@ -251,6 +284,7 @@ const TOOLBOX_XML = `
     </category>
     <category name="Filtros" colour="125">
       <block type="sql_where_compare"></block>
+      <block type="sql_subquery"></block>
       <block type="sql_where_and"></block>
       <block type="sql_where_or"></block>
     </category>
@@ -272,6 +306,13 @@ interface SqlBlocklyProps {
 export function parseConditionBlock(block: any): string {
   if (!block) return "";
   const type = block.type;
+
+  if (type === "sql_subquery") {
+    const field = block.getFieldValue("FIELD") || "";
+    const innerSql = queryBlockToSql(block);
+    if (!field) return `IN (${innerSql})`;
+    return `${field} IN (${innerSql})`;
+  }
 
   if (type === "sql_where_compare") {
     const field = block.getFieldValue("FIELD") || "";
@@ -448,14 +489,9 @@ export function buildCaseBlocksRecursively(expr: string, ws: any): any {
   return null;
 }
 
-// Compiles the entire visual tree of blocks into a clean SQL string
-export function workspaceToSql(workspace: any): string {
-  const allBlocks = workspace.getTopBlocks(true);
-  const queryBlock = allBlocks.find((b: any) => b.type === "sql_query");
-
-  if (!queryBlock) {
-    return "";
-  }
+// Compiles a single query block (top query or nested subquery) into SQL
+export function queryBlockToSql(queryBlock: any): string {
+  if (!queryBlock) return "";
 
   // 1. SELECT fields connection
   const fieldsArray: string[] = [];
@@ -581,6 +617,193 @@ export function workspaceToSql(workspace: any): string {
   }
 
   return sql;
+}
+
+// Populates fields, tables, joins, where conditions, groupBy, orderBy and limit of any query block recursively
+export function populateQueryBlock(queryBlock: any, data: any, ws: any) {
+  // 1. Populate SELECT fields in connection statement FIELDS
+  if (data.selectFields && data.selectFields.length > 0) {
+    let parentInputConnection = queryBlock.getInput("FIELDS")?.connection;
+    for (const fieldName of data.selectFields) {
+      const cleanField = fieldName.trim();
+      if (!cleanField || cleanField === "*") continue;
+
+      // Check if it's an aggregate function expression like COUNT(*) or SUM(amount) AS total
+      const funcMatch = /^([A-Za-z0-9_]+)\s*\(([^)]*)\)(?:\s+(?:AS\s+)?([A-Za-z0-9_]+))?$/i.exec(cleanField);
+      if (funcMatch) {
+        const funcName = funcMatch[1].toUpperCase();
+        const param = funcMatch[2].trim();
+        const alias = funcMatch[3] ? funcMatch[3].trim() : "";
+
+        // Dynamic check: if funcName is not in option list, add it dynamically (Requirement 2)
+        if (!DYNAMIC_FUNCTIONS.some(opt => opt[1] === funcName)) {
+          DYNAMIC_FUNCTIONS.push([funcName, funcName]);
+        }
+
+        const selectItemBlock = ws.newBlock("sql_function_item");
+        selectItemBlock.initSvg();
+        selectItemBlock.render();
+
+        // Settle instance dropdown options directly to ensure correct visual rendering
+        const dropdown = selectItemBlock.getField("FUNC_NAME") as any;
+        if (dropdown && Array.isArray(dropdown.menuGenerator_)) {
+          if (!dropdown.menuGenerator_.some((opt: any) => opt[1] === funcName)) {
+            dropdown.menuGenerator_.push([funcName, funcName]);
+          }
+        }
+
+        selectItemBlock.setFieldValue(funcName, "FUNC_NAME");
+        selectItemBlock.setFieldValue(param, "PARAM");
+        selectItemBlock.setFieldValue(alias, "ALIAS");
+
+        if (parentInputConnection && selectItemBlock.outputConnection) {
+          parentInputConnection.connect(selectItemBlock.outputConnection);
+          parentInputConnection = selectItemBlock.getInput("NEXT")?.connection;
+        }
+      } else if (cleanField.toUpperCase().startsWith("CASE ")) {
+        let alias = "";
+        let remaining = cleanField;
+        const aliasMatch = /\s+AS\s+([A-Za-z0-9_]+)$/i.exec(cleanField);
+        if (aliasMatch) {
+          alias = aliasMatch[1].trim();
+          remaining = cleanField.substring(0, aliasMatch.index).trim();
+        } else {
+          const lastSpaceIdx = cleanField.lastIndexOf(" ");
+          if (lastSpaceIdx !== -1) {
+            const potentialAlias = cleanField.substring(lastSpaceIdx + 1).trim();
+            const preceding = cleanField.substring(0, lastSpaceIdx).trim();
+            if (/^[A-Za-z0-9_]+$/.test(potentialAlias) && preceding.toUpperCase().endsWith("END")) {
+              alias = potentialAlias;
+              remaining = preceding;
+            }
+          }
+        }
+        const caseBlock = buildCaseBlocksRecursively(remaining, ws);
+        if (caseBlock) {
+          if (alias) {
+            caseBlock.setFieldValue(alias, "ALIAS");
+          }
+          if (parentInputConnection && caseBlock.outputConnection) {
+            parentInputConnection.connect(caseBlock.outputConnection);
+            parentInputConnection = caseBlock.getInput("NEXT")?.connection;
+          }
+        }
+      } else {
+        const selectItemBlock = ws.newBlock("sql_select_item");
+        selectItemBlock.initSvg();
+        selectItemBlock.render();
+        selectItemBlock.setFieldValue(cleanField, "FIELD_NAME");
+
+        if (parentInputConnection && selectItemBlock.outputConnection) {
+          parentInputConnection.connect(selectItemBlock.outputConnection);
+          parentInputConnection = selectItemBlock.getInput("NEXT")?.connection;
+        }
+      }
+    }
+  }
+
+  // 2. Populate TABLES and JOINs in TABLES connection statement
+  let tablesConnection = queryBlock.getInput("TABLES")?.connection;
+
+  if (data.mainTable) {
+    const tableItemBlock = ws.newBlock("sql_table_item");
+    tableItemBlock.initSvg();
+    tableItemBlock.render();
+    tableItemBlock.setFieldValue(data.mainTable, "TABLE_NAME");
+
+    if (tablesConnection && tableItemBlock.outputConnection) {
+      tablesConnection.connect(tableItemBlock.outputConnection);
+      tablesConnection = tableItemBlock.getInput("NEXT")?.connection;
+    }
+  }
+
+  if (data.joins && data.joins.length > 0) {
+    for (const join of data.joins) {
+      const joinBlock = ws.newBlock("sql_join_item");
+      joinBlock.initSvg();
+      joinBlock.render();
+      joinBlock.setFieldValue(join.joinType, "JOIN_TYPE");
+      joinBlock.setFieldValue(join.table, "TABLE_NAME");
+
+      if (tablesConnection && joinBlock.outputConnection) {
+        tablesConnection.connect(joinBlock.outputConnection);
+        tablesConnection = joinBlock.getInput("NEXT")?.connection;
+      }
+
+      if (join.onCondition) {
+        const onCondBlock = buildWhereBlockRecursively(join.onCondition, ws);
+        if (onCondBlock) {
+          const onInput = joinBlock.getInput("ON");
+          if (onInput && onInput.connection && onCondBlock.outputConnection) {
+            onInput.connection.connect(onCondBlock.outputConnection);
+          }
+        }
+      }
+    }
+  }
+
+  // 3. Connect WHERE block recursively
+  if (data.whereCondition) {
+    const whereBlock = buildWhereBlockRecursively(data.whereCondition, ws);
+    if (whereBlock) {
+      const input = queryBlock.getInput("WHERE");
+      if (input && input.connection && whereBlock.outputConnection) {
+        input.connection.connect(whereBlock.outputConnection);
+      }
+    }
+  }
+
+  // 4. GROUP BY fields statement
+  if (data.groupByFields && data.groupByFields.length > 0) {
+    let parentInputConnection = queryBlock.getInput("GROUP_BY")?.connection;
+    for (const gbField of data.groupByFields) {
+      const cleanGbField = gbField.trim();
+      if (!cleanGbField) continue;
+      const gbItemBlock = ws.newBlock("sql_group_by_item");
+      gbItemBlock.initSvg();
+      gbItemBlock.render();
+      gbItemBlock.setFieldValue(cleanGbField, "FIELD_NAME");
+
+      if (parentInputConnection && gbItemBlock.outputConnection) {
+        parentInputConnection.connect(gbItemBlock.outputConnection);
+        parentInputConnection = gbItemBlock.getInput("NEXT")?.connection;
+      }
+    }
+  }
+
+  // 5. ORDER BY fields statement
+  if (data.orderByFields && data.orderByFields.length > 0) {
+    let parentInputConnection = queryBlock.getInput("ORDER_BY")?.connection;
+    for (const orderItem of data.orderByFields) {
+      const orderBlock = ws.newBlock("sql_order_by_item");
+      orderBlock.initSvg();
+      orderBlock.render();
+      orderBlock.setFieldValue(orderItem.column, "COLUMN");
+      orderBlock.setFieldValue(orderItem.direction, "DIRECTION");
+
+      if (parentInputConnection && orderBlock.outputConnection) {
+        parentInputConnection.connect(orderBlock.outputConnection);
+        parentInputConnection = orderBlock.getInput("NEXT")?.connection;
+      }
+    }
+  }
+
+  // 6. Set LIMIT
+  if (data.limit) {
+    queryBlock.setFieldValue(data.limit, "LIMIT");
+  }
+}
+
+// Compiles the entire visual tree of blocks into a clean SQL string
+export function workspaceToSql(workspace: any): string {
+  const allBlocks = workspace.getTopBlocks(true);
+  const queryBlock = allBlocks.find((b: any) => b.type === "sql_query");
+
+  if (!queryBlock) {
+    return "";
+  }
+
+  return queryBlockToSql(queryBlock);
 }
 
 // Build WHERE and ON conditions recursively
@@ -790,6 +1013,26 @@ export function buildWhereBlockRecursively(whereStr: string, workspace: any): an
     const field = whereStr.substring(0, foundOp.index).trim();
     const value = whereStr.substring(foundOp.index + foundOp.length).trim();
 
+    if (foundOp.op === "IN") {
+      let cleanVal = value;
+      if (cleanVal.startsWith("(") && cleanVal.endsWith(")")) {
+        cleanVal = cleanVal.substring(1, cleanVal.length - 1).trim();
+      }
+      if (/^SELECT\b/i.test(cleanVal)) {
+        const block = workspace.newBlock("sql_subquery");
+        block.initSvg();
+        block.render();
+        block.setFieldValue(field, "FIELD");
+        try {
+          const subData = parseSqlStringToData(cleanVal);
+          populateQueryBlock(block, subData, workspace);
+        } catch (err) {
+          console.error("Error parsing subquery:", err);
+        }
+        return block;
+      }
+    }
+
     const block = workspace.newBlock("sql_where_compare");
     block.initSvg();
     block.render();
@@ -830,177 +1073,7 @@ export default function SqlBlockly({ onSqlChange, editorTriggerRef }: SqlBlockly
       queryBlock.render();
       queryBlock.moveBy(40, 40);
 
-      // 1. Populate SELECT fields in connection statement FIELDS
-      if (data.selectFields && data.selectFields.length > 0) {
-        let parentInputConnection = queryBlock.getInput("FIELDS")?.connection;
-        for (const fieldName of data.selectFields) {
-          const cleanField = fieldName.trim();
-          if (!cleanField || cleanField === "*") continue;
-
-          // Check if it's an aggregate function expression like COUNT(*) or SUM(amount) AS total
-          const funcMatch = /^([A-Za-z0-9_]+)\s*\(([^)]*)\)(?:\s+(?:AS\s+)?([A-Za-z0-9_]+))?$/i.exec(cleanField);
-          if (funcMatch) {
-            const funcName = funcMatch[1].toUpperCase();
-            const param = funcMatch[2].trim();
-            const alias = funcMatch[3] ? funcMatch[3].trim() : "";
-
-            // Dynamic check: if funcName is not in option list, add it dynamically (Requirement 2)
-            if (!DYNAMIC_FUNCTIONS.some(opt => opt[1] === funcName)) {
-              DYNAMIC_FUNCTIONS.push([funcName, funcName]);
-            }
-
-            const selectItemBlock = ws.newBlock("sql_function_item");
-            selectItemBlock.initSvg();
-            selectItemBlock.render();
-
-            // Settle instance dropdown options directly to ensure correct visual rendering
-            const dropdown = selectItemBlock.getField("FUNC_NAME") as any;
-            if (dropdown && Array.isArray(dropdown.menuGenerator_)) {
-              if (!dropdown.menuGenerator_.some((opt: any) => opt[1] === funcName)) {
-                dropdown.menuGenerator_.push([funcName, funcName]);
-              }
-            }
-
-            selectItemBlock.setFieldValue(funcName, "FUNC_NAME");
-            selectItemBlock.setFieldValue(param, "PARAM");
-            selectItemBlock.setFieldValue(alias, "ALIAS");
-
-            if (parentInputConnection && selectItemBlock.outputConnection) {
-              parentInputConnection.connect(selectItemBlock.outputConnection);
-              parentInputConnection = selectItemBlock.getInput("NEXT")?.connection;
-            }
-          } else if (cleanField.toUpperCase().startsWith("CASE ")) {
-            let alias = "";
-            let remaining = cleanField;
-            const aliasMatch = /\s+AS\s+([A-Za-z0-9_]+)$/i.exec(cleanField);
-            if (aliasMatch) {
-              alias = aliasMatch[1].trim();
-              remaining = cleanField.substring(0, aliasMatch.index).trim();
-            } else {
-              const lastSpaceIdx = cleanField.lastIndexOf(" ");
-              if (lastSpaceIdx !== -1) {
-                const potentialAlias = cleanField.substring(lastSpaceIdx + 1).trim();
-                const preceding = cleanField.substring(0, lastSpaceIdx).trim();
-                if (/^[A-Za-z0-9_]+$/.test(potentialAlias) && preceding.toUpperCase().endsWith("END")) {
-                  alias = potentialAlias;
-                  remaining = preceding;
-                }
-              }
-            }
-            const caseBlock = buildCaseBlocksRecursively(remaining, ws);
-            if (caseBlock) {
-              if (alias) {
-                caseBlock.setFieldValue(alias, "ALIAS");
-              }
-              if (parentInputConnection && caseBlock.outputConnection) {
-                parentInputConnection.connect(caseBlock.outputConnection);
-                parentInputConnection = caseBlock.getInput("NEXT")?.connection;
-              }
-            }
-          } else {
-            const selectItemBlock = ws.newBlock("sql_select_item");
-            selectItemBlock.initSvg();
-            selectItemBlock.render();
-            selectItemBlock.setFieldValue(cleanField, "FIELD_NAME");
-
-            if (parentInputConnection && selectItemBlock.outputConnection) {
-              parentInputConnection.connect(selectItemBlock.outputConnection);
-              parentInputConnection = selectItemBlock.getInput("NEXT")?.connection;
-            }
-          }
-        }
-      }
-
-      // 2. Populate TABLES and JOINs in TABLES connection statement
-      let tablesConnection = queryBlock.getInput("TABLES")?.connection;
-
-      if (data.mainTable) {
-        const tableItemBlock = ws.newBlock("sql_table_item");
-        tableItemBlock.initSvg();
-        tableItemBlock.render();
-        tableItemBlock.setFieldValue(data.mainTable, "TABLE_NAME");
-
-        if (tablesConnection && tableItemBlock.outputConnection) {
-          tablesConnection.connect(tableItemBlock.outputConnection);
-          tablesConnection = tableItemBlock.getInput("NEXT")?.connection;
-        }
-      }
-
-      if (data.joins && data.joins.length > 0) {
-        for (const join of data.joins) {
-          const joinBlock = ws.newBlock("sql_join_item");
-          joinBlock.initSvg();
-          joinBlock.render();
-          joinBlock.setFieldValue(join.joinType, "JOIN_TYPE");
-          joinBlock.setFieldValue(join.table, "TABLE_NAME");
-
-          if (tablesConnection && joinBlock.outputConnection) {
-            tablesConnection.connect(joinBlock.outputConnection);
-            tablesConnection = joinBlock.getInput("NEXT")?.connection;
-          }
-
-          if (join.onCondition) {
-            const onCondBlock = buildWhereBlockRecursively(join.onCondition, ws);
-            if (onCondBlock) {
-              const onInput = joinBlock.getInput("ON");
-              if (onInput && onInput.connection && onCondBlock.outputConnection) {
-                onInput.connection.connect(onCondBlock.outputConnection);
-              }
-            }
-          }
-        }
-      }
-
-      // 3. Connect WHERE block recursively
-      if (data.whereCondition) {
-        const whereBlock = buildWhereBlockRecursively(data.whereCondition, ws);
-        if (whereBlock) {
-          const input = queryBlock.getInput("WHERE");
-          if (input && input.connection && whereBlock.outputConnection) {
-            input.connection.connect(whereBlock.outputConnection);
-          }
-        }
-      }
-
-      // 4. GROUP BY fields statement
-      if (data.groupByFields && data.groupByFields.length > 0) {
-        let parentInputConnection = queryBlock.getInput("GROUP_BY")?.connection;
-        for (const gbField of data.groupByFields) {
-          const cleanGbField = gbField.trim();
-          if (!cleanGbField) continue;
-          const gbItemBlock = ws.newBlock("sql_group_by_item");
-          gbItemBlock.initSvg();
-          gbItemBlock.render();
-          gbItemBlock.setFieldValue(cleanGbField, "FIELD_NAME");
-
-          if (parentInputConnection && gbItemBlock.outputConnection) {
-            parentInputConnection.connect(gbItemBlock.outputConnection);
-            parentInputConnection = gbItemBlock.getInput("NEXT")?.connection;
-          }
-        }
-      }
-
-      // 5. ORDER BY fields statement
-      if (data.orderByFields && data.orderByFields.length > 0) {
-        let parentInputConnection = queryBlock.getInput("ORDER_BY")?.connection;
-        for (const orderItem of data.orderByFields) {
-          const orderBlock = ws.newBlock("sql_order_by_item");
-          orderBlock.initSvg();
-          orderBlock.render();
-          orderBlock.setFieldValue(orderItem.column, "COLUMN");
-          orderBlock.setFieldValue(orderItem.direction, "DIRECTION");
-
-          if (parentInputConnection && orderBlock.outputConnection) {
-            parentInputConnection.connect(orderBlock.outputConnection);
-            parentInputConnection = orderBlock.getInput("NEXT")?.connection;
-          }
-        }
-      }
-
-      // 6. Set LIMIT
-      if (data.limit) {
-        queryBlock.setFieldValue(data.limit, "LIMIT");
-      }
+      populateQueryBlock(queryBlock, data, ws);
 
       ws.scrollCenter();
     } catch (err) {
@@ -1293,6 +1366,14 @@ export default function SqlBlockly({ onSqlChange, editorTriggerRef }: SqlBlockly
               >
                 <Filter size={12} className="text-emerald-500" />
                 <span>+ Filtro</span>
+              </button>
+              <button
+                id="btn-add-subquery"
+                onClick={() => spawnBlock("sql_subquery")}
+                className="flex items-center justify-center gap-1.5 px-2.5 py-1 bg-white hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-md text-xs font-semibold cursor-pointer active:scale-95 transition-all shadow-sm shrink-0"
+              >
+                <Layers size={12} className="text-emerald-500" />
+                <span>+ Subquery</span>
               </button>
               <button
                 id="btn-add-and"
