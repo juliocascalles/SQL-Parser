@@ -721,6 +721,252 @@ export function translateWhereForMongo(whereCondition: string, indent: string = 
   return `{ ${inner} }`;
 }
 
+export interface ParsedCaseStatement {
+  branches: { whenCondition: string; thenValue: string }[];
+  elseVal: string;
+  alias: string;
+  originalExpr: string;
+}
+
+export function parseSelectCaseExpression(selectExpr: string): ParsedCaseStatement | null {
+  let clean = selectExpr.trim();
+  
+  let parenDepth = 0;
+  let caseDepth = 0;
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+  
+  let topLevelEndIndex = -1;
+  const upper = clean.toUpperCase();
+  for (let i = 0; i < clean.length; i++) {
+    const char = clean[i];
+    if (char === "\\" && (inSingleQuote || inDoubleQuote)) {
+      i++;
+      continue;
+    }
+    if (char === "'" && !inDoubleQuote) {
+      inSingleQuote = !inSingleQuote;
+      continue;
+    }
+    if (char === '"' && !inSingleQuote) {
+      inDoubleQuote = !inDoubleQuote;
+      continue;
+    }
+    if (inSingleQuote || inDoubleQuote) continue;
+    
+    if (char === "(") parenDepth++;
+    else if (char === ")") parenDepth--;
+    
+    if (parenDepth === 0) {
+      if (upper.substring(i, i + 5) === "CASE " && (i === 0 || !/[A-Za-z0-9_]/.test(clean[i - 1]))) {
+        caseDepth++;
+      } else if (upper.substring(i, i + 3) === "END" && (i + 3 === upper.length || !/[A-Za-z0-9_]/.test(clean[i + 3]))) {
+        caseDepth--;
+        if (caseDepth === 0) {
+          topLevelEndIndex = i;
+          break;
+        }
+      }
+    }
+  }
+  
+  if (topLevelEndIndex === -1) return null;
+  
+  const afterEnd = clean.substring(topLevelEndIndex + 3).trim();
+  let alias = "";
+  if (afterEnd) {
+    const aliasMatch = /^(?:AS\s+)?([A-Za-z0-9_]+|'[^']+'|"[^"]+")$/i.exec(afterEnd);
+    if (aliasMatch) {
+      alias = cleanFieldName(aliasMatch[1]);
+    } else {
+      alias = cleanFieldName(afterEnd);
+    }
+  }
+  if (!alias) {
+    alias = "resultado";
+  }
+  
+  // Now extract WHEN, THEN, ELSE
+  let currentCaseDepth = 0;
+  let currentParenDepth = 0;
+  let whenIndices: number[] = [];
+  let thenIndices: number[] = [];
+  let elseIndex = -1;
+  
+  inSingleQuote = false;
+  inDoubleQuote = false;
+  
+  for (let i = 5; i < topLevelEndIndex; i++) {
+    const char = clean[i];
+    if (char === "\\" && (inSingleQuote || inDoubleQuote)) {
+      i++;
+      continue;
+    }
+    if (char === "'" && !inDoubleQuote) {
+      inSingleQuote = !inSingleQuote;
+      continue;
+    }
+    if (char === '"' && !inSingleQuote) {
+      inDoubleQuote = !inDoubleQuote;
+      continue;
+    }
+    if (inSingleQuote || inDoubleQuote) continue;
+    
+    if (char === "(") currentParenDepth++;
+    else if (char === ")") currentParenDepth--;
+    
+    if (currentParenDepth === 0) {
+      if (upper.substring(i, i + 5) === "CASE " && (i === 0 || !/[A-Za-z0-9_]/.test(clean[i - 1]))) {
+        currentCaseDepth++;
+      } else if (upper.substring(i, i + 3) === "END" && (i + 3 === upper.length || !/[A-Za-z0-9_]/.test(clean[i + 3]))) {
+        currentCaseDepth--;
+      }
+      
+      if (currentCaseDepth === 0) {
+        if (upper.substring(i, i + 5) === "WHEN " && (i === 0 || !/[A-Za-z0-9_]/.test(clean[i - 1]))) {
+          whenIndices.push(i);
+        } else if (upper.substring(i, i + 5) === "THEN " && (i === 0 || !/[A-Za-z0-9_]/.test(clean[i - 1]))) {
+          thenIndices.push(i);
+        } else if (upper.substring(i, i + 5) === "ELSE " && (i === 0 || !/[A-Za-z0-9_]/.test(clean[i - 1]))) {
+          elseIndex = i;
+        }
+      }
+    }
+  }
+  
+  const branches: { whenCondition: string; thenValue: string }[] = [];
+  for (let k = 0; k < whenIndices.length; k++) {
+    const condStart = whenIndices[k] + 5;
+    const condEnd = thenIndices[k];
+    if (condEnd === undefined || condEnd <= condStart) continue;
+    
+    const whenCondition = clean.substring(condStart, condEnd).trim();
+    const thenStart = condEnd + 5;
+    let thenEnd = topLevelEndIndex;
+    
+    if (k + 1 < whenIndices.length) {
+      thenEnd = whenIndices[k + 1];
+    } else if (elseIndex !== -1) {
+      thenEnd = elseIndex;
+    }
+    
+    const thenValue = clean.substring(thenStart, thenEnd).trim();
+    branches.push({ whenCondition, thenValue });
+  }
+  
+  let elseVal = "";
+  if (elseIndex !== -1) {
+    elseVal = clean.substring(elseIndex + 5, topLevelEndIndex).trim();
+  }
+  
+  return {
+    branches,
+    elseVal,
+    alias,
+    originalExpr: selectExpr
+  };
+}
+
+export function formatOperandForMongoExpr(operand: string): string {
+  const trimmed = operand.trim();
+  if (trimmed.startsWith("'") && trimmed.endsWith("'")) {
+    return `"${trimmed.slice(1, -1)}"`;
+  }
+  if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+    return `"${trimmed.slice(1, -1)}"`;
+  }
+  if (!isNaN(Number(trimmed)) && trimmed !== "") {
+    return trimmed;
+  }
+  return `"$${cleanFieldName(trimmed)}"`;
+}
+
+export function translateConditionToMongoExpression(condStr: string): string {
+  const cond = parseSingleCondition(condStr);
+  if (!cond) {
+    return `"$${cleanFieldName(condStr)}"`;
+  }
+  
+  const left = formatOperandForMongoExpr(cond.field);
+  const right = formatOperandForMongoExpr(cond.value);
+  
+  let op = "$eq";
+  switch (cond.operator.toUpperCase()) {
+    case "=": op = "$eq"; break;
+    case ">": op = "$gt"; break;
+    case "<": op = "$lt"; break;
+    case ">=": op = "$gte"; break;
+    case "<=": op = "$lte"; break;
+    case "!=":
+    case "<>": op = "$ne"; break;
+  }
+  
+  return `{ ${op}: [${left}, ${right}] }`;
+}
+
+export function formatValueForMongoExpr(v: string): string {
+  const trimmed = v.trim();
+  if (trimmed.startsWith("'") && trimmed.endsWith("'")) {
+    return `"${trimmed.slice(1, -1)}"`;
+  }
+  if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+    return `"${trimmed.slice(1, -1)}"`;
+  }
+  if (!isNaN(Number(trimmed)) && trimmed !== "") {
+    return trimmed;
+  }
+  return `"$${cleanFieldName(trimmed)}"`;
+}
+
+export function buildMongoSwitchStage(cs: ParsedCaseStatement, indent: string = "        "): string {
+  const branchLines: string[] = [];
+  for (const b of cs.branches) {
+    const resolvedCond = translateConditionToMongoExpression(b.whenCondition);
+    const resolvedThen = formatValueForMongoExpr(b.thenValue);
+    branchLines.push(
+      `${indent}    {\n${indent}      case: ${resolvedCond},\n${indent}      then: ${resolvedThen}\n${indent}    }`
+    );
+  }
+  
+  const branchesStr = `[\n${branchLines.join(",\n")}\n${indent}  ]`;
+  const defaultStr = cs.elseVal ? formatValueForMongoExpr(cs.elseVal) : "null";
+  
+  return `{\n${indent}  $switch: {\n${indent}    branches: ${branchesStr},\n${indent}    default: ${defaultStr}\n${indent}  }\n${indent}}`;
+}
+
+export function formatValueForPandas(v: string): string {
+  const trimmed = v.trim();
+  if (trimmed.startsWith("'") && trimmed.endsWith("'")) {
+    return `"${trimmed.slice(1, -1)}"`;
+  }
+  if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+    return `"${trimmed.slice(1, -1)}"`;
+  }
+  if (!isNaN(Number(trimmed)) && trimmed !== "") {
+    return trimmed;
+  }
+  if (/^[A-Za-z0-9_]+$/.test(trimmed)) {
+    return `df['${trimmed}']`;
+  }
+  return trimmed;
+}
+
+export function buildPandasCaseFormula(cs: ParsedCaseStatement): string {
+  const conds: string[] = [];
+  const outputs: string[] = [];
+  
+  for (const b of cs.branches) {
+    conds.push(`        ${translateWhereForPandas(b.whenCondition)}`);
+    outputs.push(`        ${formatValueForPandas(b.thenValue)}`);
+  }
+  
+  const condsStr = `[\n${conds.join(",\n")}\n    ]`;
+  const outputsStr = `[\n${outputs.join(",\n")}\n    ]`;
+  const defaultVal = cs.elseVal ? formatValueForPandas(cs.elseVal) : "None";
+  
+  return `np.select(\n    ${condsStr},\n    ${outputsStr},\n    default=${defaultVal}\n)`;
+}
+
 export interface FunctionTranslation {
   original: string;
   alias: string;
@@ -1082,6 +1328,18 @@ export function translateSql(sql: string, targetLanguage: string): string {
     const hasWhere = parsed.whereCondition.trim() !== "";
     const hasOrderBy = parsed.orderByFields.length > 0;
     
+    // Check if there is any CASE statement in SELECT fields
+    const caseStatements: ParsedCaseStatement[] = [];
+    for (const f of parsed.selectFields) {
+      if (/^CASE\b/i.test(f.trim())) {
+        const cs = parseSelectCaseExpression(f);
+        if (cs) {
+          caseStatements.push(cs);
+        }
+      }
+    }
+    const hasCase = caseStatements.length > 0;
+    
     let resultMongo = "";
     
     if (hasGroupBy) {
@@ -1115,30 +1373,53 @@ export function translateSql(sql: string, targetLanguage: string): string {
       // No Group By -> Rule 1.1 / 1.2
       const isMultiline = hasWhere && (splitByJunctions(parsed.whereCondition).parts.length > 1);
       
-      // Get fields for projection (second argument of find)
-      const projectionFields = parsed.selectFields
-        .map(f => cleanFieldName(f.split(/\s+as\s+/i)[0]))
-        .filter(f => f !== "*" && f !== "" && !f.includes("("));
-      
-      const hasProjection = projectionFields.length > 0;
-
-      if (isMultiline) {
-        const whereMongo = translateWhereForMongo(parsed.whereCondition, "  ");
-        if (hasProjection) {
-          const projParts = projectionFields.map(f => `  ${f}: 1`).join(",\n");
-          const projMongo = `{\n${projParts}\n}`;
-          resultMongo = `db.${tbl}.find(\n  ${whereMongo.split("\n").join("\n  ")},\n  ${projMongo.split("\n").join("\n  ")}\n)`;
-        } else {
-          resultMongo = `db.${tbl}.find(\n  ${whereMongo.split("\n").join("\n  ")}\n)`;
+      if (hasCase) {
+        const projParts: string[] = [];
+        for (const f of parsed.selectFields) {
+          const trimmed = f.trim();
+          if (/^CASE\b/i.test(trimmed)) {
+            const cs = parseSelectCaseExpression(trimmed);
+            if (cs) {
+              const switchStr = buildMongoSwitchStage(cs, "        ");
+              projParts.push(`      ${cs.alias}: ${switchStr}`);
+            }
+          } else {
+            const fieldName = cleanFieldName(f.split(/\s+as\s+/i)[0]);
+            if (fieldName && fieldName !== "*") {
+              projParts.push(`      ${fieldName}: 1`);
+            }
+          }
         }
+        
+        const projMongo = `{\n${projParts.join(",\n")}\n    }`;
+        const matchStage = hasWhere ? `  {\n    $match: ${translateWhereForMongo(parsed.whereCondition, "      ")}\n  },\n` : "";
+        resultMongo = `db.${tbl}.aggregate([\n${matchStage}  {\n    $project: ${projMongo}\n  }\n])`;
       } else {
-        const whereMongo = hasWhere ? translateWhereForMongo(parsed.whereCondition, "  ") : "{}";
-        if (hasProjection) {
-          const projParts = projectionFields.map(f => `${f}: 1`).join(", ");
-          const projMongo = `{ ${projParts} }`;
-          resultMongo = `db.${tbl}.find(${whereMongo}, ${projMongo})`;
+        // Get fields for projection (second argument of find)
+        const projectionFields = parsed.selectFields
+          .map(f => cleanFieldName(f.split(/\s+as\s+/i)[0]))
+          .filter(f => f !== "*" && f !== "" && !f.includes("("));
+        
+        const hasProjection = projectionFields.length > 0;
+
+        if (isMultiline) {
+          const whereMongo = translateWhereForMongo(parsed.whereCondition, "  ");
+          if (hasProjection) {
+            const projParts = projectionFields.map(f => `  ${f}: 1`).join(",\n");
+            const projMongo = `{\n${projParts}\n}`;
+            resultMongo = `db.${tbl}.find(\n  ${whereMongo.split("\n").join("\n  ")},\n  ${projMongo.split("\n").join("\n  ")}\n)`;
+          } else {
+            resultMongo = `db.${tbl}.find(\n  ${whereMongo.split("\n").join("\n  ")}\n)`;
+          }
         } else {
-          resultMongo = `db.${tbl}.find(${whereMongo})`;
+          const whereMongo = hasWhere ? translateWhereForMongo(parsed.whereCondition, "  ") : "{}";
+          if (hasProjection) {
+            const projParts = projectionFields.map(f => `${f}: 1`).join(", ");
+            const projMongo = `{ ${projParts} }`;
+            resultMongo = `db.${tbl}.find(${whereMongo}, ${projMongo})`;
+          } else {
+            resultMongo = `db.${tbl}.find(${whereMongo})`;
+          }
         }
       }
     }
@@ -1168,7 +1449,12 @@ export function translateSql(sql: string, targetLanguage: string): string {
   // -------------------------------- Pandas Translation --------------------------------
   if (targetLanguage === "Pandas") {
     // Rule 2.1
-    let resultPandas = "import pandas as pd\n\n";
+    const hasCaseInSelect = parsed.selectFields.some(f => /^CASE\b/i.test(f.trim()));
+    let resultPandas = "import pandas as pd\n";
+    if (hasCaseInSelect) {
+      resultPandas += "import numpy as np\n";
+    }
+    resultPandas += "\n";
     
     // Rule 2.2 - Load CSV representation of DataFrames
     const mainTbl = extractTableName(parsed.mainTable || "tabela");
@@ -1228,9 +1514,20 @@ export function translateSql(sql: string, targetLanguage: string): string {
     const functionAssignments: string[] = [];
     
     for (const f of parsed.selectFields) {
-      const parts = f.split(/\s+as\s+/i);
+      const trimmed = f.trim();
+      const parts = trimmed.split(/\s+as\s+/i);
       const expr = parts[0].trim();
       const alias = parts[1] ? parts[1].trim() : "";
+      
+      if (/^CASE\b/i.test(trimmed)) {
+        const cs = parseSelectCaseExpression(trimmed);
+        if (cs) {
+          const formula = buildPandasCaseFormula(cs);
+          functionAssignments.push(`df['${cs.alias}'] = ${formula}`);
+          cleanSelFields.push(cs.alias);
+          continue;
+        }
+      }
       
       const translated = tryTranslateFunction(f);
       if (translated) {
