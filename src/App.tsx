@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import SqlBlockly from "./components/SqlBlockly";
 import { translateSql } from "./translate";
-import { optimizeSqlQuery } from "./optimization";
+import { optimizeSqlQuery, formatSqlWithIndentation } from "./optimization";
 
 // Define supported translation target languages
 interface LanguageOption {
@@ -88,13 +88,18 @@ export default function App() {
     text: ""
   });
   const [isCopied, setIsCopied] = useState<boolean>(false);
+  const [indentFormat, setIndentFormat] = useState<boolean>(false);
 
   // Reference callback to invoke the Block reconstruction on SqlBlockly
   const blocklyRebuiltCallbackRef = useRef<((sql: string) => void) | null>(null);
 
   // Triggered on Blockly block configuration change
   const handleBlocklySqlChange = (newSql: string) => {
-    setSqlQuery(newSql);
+    if (indentFormat) {
+      setSqlQuery(formatSqlWithIndentation(newSql));
+    } else {
+      setSqlQuery(newSql);
+    }
   };
 
   // Pre-configured query examples to help the user test instantly
@@ -107,7 +112,8 @@ export default function App() {
     } else {
       query = "SELECT item, price FROM products WHERE category = 'technology' AND price < 1500 ORDER BY price DESC";
     }
-    setSqlQuery(query);
+    const finalQuery = indentFormat ? formatSqlWithIndentation(query) : query;
+    setSqlQuery(finalQuery);
     // Auto-update blockly
     if (blocklyRebuiltCallbackRef.current) {
       blocklyRebuiltCallbackRef.current(query);
@@ -143,7 +149,10 @@ export default function App() {
       return;
     }
     try {
-      const optimized = optimizeSqlQuery(sqlQuery);
+      let optimized = optimizeSqlQuery(sqlQuery);
+      if (indentFormat) {
+        optimized = formatSqlWithIndentation(optimized);
+      }
       setSqlQuery(optimized);
       if (blocklyRebuiltCallbackRef.current) {
         blocklyRebuiltCallbackRef.current(optimized);
@@ -152,6 +161,16 @@ export default function App() {
     } catch (err) {
       showFeedback("error", "Ocorreu um erro ao otimizar a query.");
       console.error(err);
+    }
+  };
+
+  const handleIndentFormatChange = (checked: boolean) => {
+    setIndentFormat(checked);
+    if (checked && sqlQuery.trim()) {
+      setSqlQuery(formatSqlWithIndentation(sqlQuery));
+    } else if (!checked && sqlQuery.trim()) {
+      const flattened = sqlQuery.replace(/\s+/g, " ").trim();
+      setSqlQuery(flattened);
     }
   };
 
@@ -325,9 +344,15 @@ export default function App() {
                         2. Query SQL (Editor Manual)
                       </h2>
                     </div>
-                    <span className="text-[10px] font-mono font-bold bg-amber-955/55 text-amber-300 px-2.5 py-0.5 rounded-lg border border-amber-900/60">
-                      ANSI SQL
-                    </span>
+                    <label className="flex items-center gap-1.5 text-[10px] font-mono font-bold bg-amber-955/55 text-amber-300 px-2.5 py-0.5 rounded-lg border border-amber-900/60 cursor-pointer hover:bg-amber-950/70 transition-colors select-none">
+                      <input
+                        type="checkbox"
+                        checked={indentFormat}
+                        onChange={(e) => handleIndentFormatChange(e.target.checked)}
+                        className="rounded border-amber-700 bg-slate-950 text-amber-500 focus:ring-amber-500/30 cursor-pointer h-3 w-3"
+                      />
+                      <span>Indentação</span>
+                    </label>
                   </div>
 
                   <div className="relative flex-1 flex flex-col min-h-[220px]">
@@ -336,14 +361,12 @@ export default function App() {
                       value={sqlQuery}
                       onChange={(e) => setSqlQuery(e.target.value)}
                       placeholder="SELECT * FROM table_name WHERE condition..."
-                      className="w-full flex-1 p-4 bg-slate-950 text-emerald-400 font-mono text-sm leading-relaxed rounded-xl border border-slate-850 shadow-inner focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500/40 transition-colors resize-none"
+                      wrap={indentFormat ? "off" : "soft"}
+                      className={`w-full flex-1 p-4 bg-slate-950 text-emerald-400 font-mono text-sm leading-relaxed rounded-xl border border-slate-850 shadow-inner focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500/40 transition-colors resize-none ${
+                        indentFormat ? "whitespace-pre overflow-x-auto" : "whitespace-pre-line overflow-y-auto"
+                      }`}
                       spellCheck="false"
                     />
-                    
-                    {/* Micro instructions overlay */}
-                    <div className="absolute bottom-3 right-3 text-[10px] font-mono text-slate-400 bg-slate-900/90 px-2 py-1 rounded border border-slate-800 select-none">
-                      Modo Manual
-                    </div>
                   </div>
                 </div>
 

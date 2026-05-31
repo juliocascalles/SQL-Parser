@@ -359,6 +359,155 @@ export function findSubquery(where: string): SubqueryMatch | null {
   return null;
 }
 
+export function generateTableAliases(rawTables: string[]): Record<string, string> {
+  const cleanTables = rawTables.map(t => {
+    const match = /^[A-Za-z0-9_]+/.exec(t.trim().split(/\s+/)[0]);
+    return match ? match[0] : t.trim().split(/\s+/)[0];
+  });
+  
+  const uniqueTables = Array.from(new Set(cleanTables)).filter(Boolean);
+  
+  const lengths: Record<string, number> = {};
+  for (const t of uniqueTables) {
+    lengths[t] = 1;
+  }
+  
+  let hasCollision = true;
+  let iterations = 0;
+  while (hasCollision && iterations < 20) {
+    iterations++;
+    hasCollision = false;
+    
+    const currentAliases: Record<string, string> = {};
+    const aliasToTables: Record<string, string[]> = {};
+    
+    for (const t of uniqueTables) {
+      const len = lengths[t];
+      const alias = t.substring(0, Math.min(len, t.length)).toLowerCase();
+      currentAliases[t] = alias;
+      if (!aliasToTables[alias]) {
+        aliasToTables[alias] = [];
+      }
+      aliasToTables[alias].push(t);
+    }
+    
+    for (const alias of Object.keys(aliasToTables)) {
+      const colliding = aliasToTables[alias];
+      if (colliding.length > 1) {
+        hasCollision = true;
+        for (const t of colliding) {
+          if (lengths[t] === 1) {
+            lengths[t] = 3;
+          } else {
+            lengths[t] = lengths[t] + 1;
+          }
+        }
+      }
+    }
+  }
+  
+  const finalMap: Record<string, string> = {};
+  for (let i = 0; i < rawTables.length; i++) {
+    const raw = rawTables[i];
+    const clean = cleanTables[i];
+    finalMap[raw] = clean.substring(0, Math.min(lengths[clean] || 1, clean.length)).toLowerCase();
+  }
+  return finalMap;
+}
+
+export function prefixIdentifiersInString(sqlSnippet: string, alias: string): string {
+  let result = "";
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+  
+  let currentWord = "";
+  
+  const keywords = new Set([
+    "select", "from", "where", "join", "on", "and", "or", "not", "in", "like", 
+    "between", "is", "null", "as", "year", "month", "day", "date", "count", 
+    "sum", "avg", "max", "min", "case", "when", "then", "else", "end", "group", "by", "order", "limit", "asc", "desc", "null"
+  ]);
+  
+  function flushWord(word: string, nextChar: string, prevChar: string): string {
+    if (!word) return "";
+    if (/^\d+$/.test(word) || keywords.has(word.toLowerCase())) {
+      return word;
+    }
+    if (prevChar === "." || nextChar === ".") {
+      return word;
+    }
+    return `${alias}.${word}`;
+  }
+  
+  for (let i = 0; i < sqlSnippet.length; i++) {
+    const char = sqlSnippet[i];
+    
+    if (char === "'" && !inDoubleQuote) {
+      if (currentWord) {
+        const prev = sqlSnippet[i - currentWord.length - 1] || "";
+        result += flushWord(currentWord, char, prev);
+        currentWord = "";
+      }
+      inSingleQuote = !inSingleQuote;
+      result += char;
+      continue;
+    }
+    if (char === '"' && !inSingleQuote) {
+      if (currentWord) {
+        const prev = sqlSnippet[i - currentWord.length - 1] || "";
+        result += flushWord(currentWord, char, prev);
+        currentWord = "";
+      }
+      inDoubleQuote = !inDoubleQuote;
+      result += char;
+      continue;
+    }
+    
+    if (inSingleQuote || inDoubleQuote) {
+      result += char;
+      continue;
+    }
+    
+    if (/[A-Za-z0-9_]/.test(char)) {
+      currentWord += char;
+    } else {
+      if (currentWord) {
+        const prev = sqlSnippet[i - currentWord.length - 1] || "";
+        result += flushWord(currentWord, char, prev);
+        currentWord = "";
+      }
+      result += char;
+    }
+  }
+  
+  if (currentWord) {
+    const prev = sqlSnippet[sqlSnippet.length - currentWord.length - 1] || "";
+    result += flushWord(currentWord, "", prev);
+  }
+  
+  return result;
+}
+
+export function prefixSelectField(f: string, alias: string): string {
+  const parts = f.split(/\s+as\s+/i);
+  if (parts.length > 1) {
+    const expr = prefixIdentifiersInString(parts[0], alias);
+    const right = parts[1].trim();
+    return `${expr} AS ${right}`;
+  }
+  
+  const lastSpaceIdx = f.lastIndexOf(" ");
+  if (lastSpaceIdx !== -1 && !f.includes(")")) {
+    const potentialAlias = f.substring(lastSpaceIdx + 1).trim();
+    if (/^[A-Za-z0-9_]+$/.test(potentialAlias)) {
+      const expr = prefixIdentifiersInString(f.substring(0, lastSpaceIdx), alias);
+      return `${expr} ${potentialAlias}`;
+    }
+  }
+  
+  return prefixIdentifiersInString(f, alias);
+}
+
 // 2. Identify and convert subqueries into flat JOIN relations
 export function optimizeSubqueries(parsed: ParsedSqlQuery): ParsedSqlQuery {
   let hasMore = true;
@@ -382,19 +531,45 @@ export function optimizeSubqueries(parsed: ParsedSqlQuery): ParsedSqlQuery {
         break;
       }
       
-      const firstSubField = subParsed.selectFields[0];
+      const mainTableClean = currentParsed.mainTable.trim().split(/\s+/)[0];
+      const subTableClean = subParsed.mainTable.trim().split(/\s+/)[0];
+      
+      const aliases = generateTableAliases([mainTableClean, subTableClean]);
+      const mainAlias = aliases[mainTableClean] || "v";
+      const subAlias = aliases[subTableClean] || "p";
+      
+      // Prefix current query elements with mainAlias
+      currentParsed.selectFields = currentParsed.selectFields.map(f => prefixSelectField(f, mainAlias));
+      currentParsed.groupByFields = currentParsed.groupByFields.map(g => prefixIdentifiersInString(g, mainAlias));
+      currentParsed.orderByFields = currentParsed.orderByFields.map(o => ({
+        column: prefixIdentifiersInString(o.column, mainAlias),
+        direction: o.direction
+      }));
+      currentParsed.mainTable = `${mainTableClean} ${mainAlias}`;
+      
+      // Prefix sub query elements with subAlias
+      const subSelectsPrefixed = subParsed.selectFields.map(f => prefixSelectField(f, subAlias));
+      const subWherePrefixed = subParsed.whereCondition ? prefixIdentifiersInString(subParsed.whereCondition, subAlias) : "";
+      const subGroupByPrefixed = subParsed.groupByFields.map(g => prefixIdentifiersInString(g, subAlias));
+      const subOrderByPrefixed = subParsed.orderByFields.map(o => ({
+        column: prefixIdentifiersInString(o.column, subAlias),
+        direction: o.direction
+      }));
+      const subTableWithAlias = `${subTableClean} ${subAlias}`;
+      
+      const firstSubField = subSelectsPrefixed[0];
       const mainSelectsLower = new Set(currentParsed.selectFields.map(f => f.toLowerCase().trim()));
       
       const extraSelects: string[] = [];
       // Move other select fields (slice(1))
-      for (const f of subParsed.selectFields.slice(1)) {
+      for (const f of subSelectsPrefixed.slice(1)) {
         if (!mainSelectsLower.has(f.toLowerCase().trim())) {
           extraSelects.push(f);
           mainSelectsLower.add(f.toLowerCase().trim());
         }
       }
       // Move fields from whereCondition
-      const whereFields = extractFieldsFromCondition(subParsed.whereCondition);
+      const whereFields = extractFieldsFromCondition(subWherePrefixed);
       for (const wf of whereFields) {
         if (!mainSelectsLower.has(wf.toLowerCase().trim()) && wf.toLowerCase() !== firstSubField.toLowerCase()) {
           extraSelects.push(wf);
@@ -403,26 +578,31 @@ export function optimizeSubqueries(parsed: ParsedSqlQuery): ParsedSqlQuery {
       }
       
       currentParsed.selectFields = [...currentParsed.selectFields, ...extraSelects];
-      currentParsed.orderByFields = [...currentParsed.orderByFields, ...subParsed.orderByFields];
+      currentParsed.orderByFields = [...currentParsed.orderByFields, ...subOrderByPrefixed];
       
       const currentGroupByLower = new Set(currentParsed.groupByFields.map(g => g.toLowerCase().trim()));
-      for (const gb of subParsed.groupByFields) {
+      for (const gb of subGroupByPrefixed) {
         if (!currentGroupByLower.has(gb.toLowerCase().trim())) {
           currentParsed.groupByFields.push(gb);
         }
       }
       
       // Add join condition
-      const joinCondition = `(${field} = ${firstSubField})`;
+      const joinCondition = `(${prefixIdentifiersInString(field, mainAlias)} = ${firstSubField})`;
       currentParsed.joins.push({
         joinType: "JOIN",
-        table: subParsed.mainTable,
+        table: subTableWithAlias,
         onCondition: joinCondition
       });
-      currentParsed.joins.push(...subParsed.joins);
+      
+      const subJoinsPrefixed = subParsed.joins.map(join => ({
+        ...join,
+        onCondition: join.onCondition ? prefixIdentifiersInString(join.onCondition, subAlias) : ""
+      }));
+      currentParsed.joins.push(...subJoinsPrefixed);
       
       // Update where condition: replace the exact matched subquery with its internal conditions (or 1=1 if none)
-      const replacement = subParsed.whereCondition ? `(${subParsed.whereCondition})` : "1=1";
+      const replacement = subWherePrefixed ? `(${subWherePrefixed})` : "1=1";
       const idx = currentParsed.whereCondition.indexOf(fullMatchString);
       if (idx !== -1) {
         currentParsed.whereCondition = 
@@ -430,6 +610,8 @@ export function optimizeSubqueries(parsed: ParsedSqlQuery): ParsedSqlQuery {
           replacement + 
           currentParsed.whereCondition.substring(idx + fullMatchString.length);
       }
+      
+      currentParsed.whereCondition = prefixIdentifiersInString(currentParsed.whereCondition, mainAlias);
     } catch (err) {
       console.error("Subquery optimization error:", err);
       hasMore = false;
@@ -869,4 +1051,116 @@ export function optimizeSqlQuery(sql: string): string {
     // Return original if query optimization crashes to preserve user inputs
     return sql;
   }
+}
+
+export function formatSqlWithIndentation(sql: string): string {
+  if (!sql || !sql.trim()) return "";
+  try {
+    const parsed = parseSqlStringToData(sql);
+    const lines: string[] = [];
+    
+    // 1. SELECT
+    lines.push("SELECT");
+    if (parsed.selectFields.length > 0) {
+      parsed.selectFields.forEach((f, idx) => {
+        const comma = idx < parsed.selectFields.length - 1 ? "," : "";
+        lines.push(`    ${f.trim()}${comma}`);
+      });
+    } else {
+      lines.push("    *");
+    }
+    
+    // 2. FROM
+    lines.push("FROM");
+    const mainTableClean = parsed.mainTable.trim();
+    lines.push(`    ${mainTableClean}`);
+    
+    // 3. JOINS
+    for (const j of parsed.joins) {
+      lines.push(j.joinType.toUpperCase());
+      let joinLine = j.table.trim();
+      if (j.onCondition) {
+        joinLine += ` ON ${j.onCondition.trim()}`;
+      }
+      lines.push(`    ${joinLine}`);
+    }
+    
+    // 4. WHERE
+    if (parsed.whereCondition && parsed.whereCondition.trim()) {
+      lines.push("WHERE");
+      const formattedWhere = formatWhereConditionWithIndentation(parsed.whereCondition, "    ");
+      lines.push(...formattedWhere);
+    }
+    
+    // 5. GROUP BY
+    if (parsed.groupByFields.length > 0) {
+      lines.push("GROUP BY");
+      parsed.groupByFields.forEach((g, idx) => {
+        const comma = idx < parsed.groupByFields.length - 1 ? "," : "";
+        lines.push(`    ${g.trim()}${comma}`);
+      });
+    }
+    
+    // 6. ORDER BY
+    if (parsed.orderByFields.length > 0) {
+      lines.push("ORDER BY");
+      parsed.orderByFields.forEach((o, idx) => {
+        const comma = idx < parsed.orderByFields.length - 1 ? "," : "";
+        lines.push(`    ${o.column.trim()} ${o.direction}${comma}`);
+      });
+    }
+    
+    // 7. LIMIT
+    if (parsed.limit && parsed.limit.trim()) {
+      lines.push("LIMIT");
+      lines.push(`    ${parsed.limit.trim()}`);
+    }
+    
+    return lines.join("\n");
+  } catch (err) {
+    console.error("Formatting error, defaulting to fallback formatter:", err);
+    return sql;
+  }
+}
+
+export function formatWhereConditionWithIndentation(cond: string, indent: string = "    "): string[] {
+  const clean = cond.trim();
+  if (!clean) return [];
+  
+  const result = splitTopLevelJunction(clean);
+  if (!result.type || result.parts.length <= 1) {
+    if (clean.startsWith("(") && clean.endsWith(")")) {
+      const inner = clean.slice(1, -1).trim();
+      const innerResult = splitTopLevelJunction(inner);
+      if (innerResult.type && innerResult.parts.length > 1) {
+        const formattedInner = formatWhereConditionWithIndentation(inner, "    ");
+        if (formattedInner.length > 0) {
+          const firstLineTrimmed = formattedInner[0].trimStart();
+          formattedInner[0] = "    (" + firstLineTrimmed;
+          formattedInner[formattedInner.length - 1] = formattedInner[formattedInner.length - 1] + ")";
+          return formattedInner;
+        }
+      }
+    }
+    return ["    " + clean];
+  }
+  
+  const lines: string[] = [];
+  const op = result.type; // "AND" or "OR"
+  
+  // Format the first part
+  const firstParts = formatWhereConditionWithIndentation(result.parts[0], "    ");
+  lines.push(...firstParts);
+  
+  // For subsequent parts, format and prepend op
+  for (let i = 1; i < result.parts.length; i++) {
+    const partLines = formatWhereConditionWithIndentation(result.parts[i], "    ");
+    if (partLines.length > 0) {
+      const trimmedLine = partLines[0].trimStart();
+      partLines[0] = `    ${op} ${trimmedLine}`;
+      lines.push(...partLines);
+    }
+  }
+  
+  return lines;
 }
