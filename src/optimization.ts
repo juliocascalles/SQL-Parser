@@ -1064,7 +1064,7 @@ export function formatSqlWithIndentation(sql: string): string {
     if (parsed.selectFields.length > 0) {
       parsed.selectFields.forEach((f, idx) => {
         const comma = idx < parsed.selectFields.length - 1 ? "," : "";
-        lines.push(`    ${f.trim()}${comma}`);
+        lines.push(`${formatCaseInExpression(f.trim(), "    ")}${comma}`);
       });
     } else {
       lines.push("    *");
@@ -1163,4 +1163,202 @@ export function formatWhereConditionWithIndentation(cond: string, indent: string
   }
   
   return lines;
+}
+
+interface Token {
+  type: 'word' | 'string' | 'whitespace' | 'symbol';
+  value: string;
+}
+
+function tokenize(input: string): Token[] {
+  const tokens: Token[] = [];
+  let i = 0;
+  while (i < input.length) {
+    const char = input[i];
+    
+    // Single quote string
+    if (char === "'") {
+      let val = "'";
+      i++;
+      while (i < input.length) {
+        val += input[i];
+        if (input[i] === "'") {
+          if (i + 1 < input.length && input[i + 1] === "'") {
+            val += "'";
+            i += 2;
+            continue;
+          }
+          i++;
+          break;
+        }
+        i++;
+      }
+      tokens.push({ type: 'string', value: val });
+      continue;
+    }
+    
+    // Double quote string
+    if (char === '"') {
+      let val = '"';
+      i++;
+      while (i < input.length) {
+        val += input[i];
+        if (input[i] === '"') {
+          i++;
+          break;
+        }
+        i++;
+      }
+      tokens.push({ type: 'string', value: val });
+      continue;
+    }
+    
+    // Whitespace
+    if (/\s/.test(char)) {
+      let val = "";
+      while (i < input.length && /\s/.test(input[i])) {
+        val += input[i];
+        i++;
+      }
+      tokens.push({ type: 'whitespace', value: val });
+      continue;
+    }
+    
+    // Word (letters, digits, underscore)
+    if (/[A-Za-z0-9_]/.test(char)) {
+      let val = "";
+      while (i < input.length && /[A-Za-z0-9_]/.test(input[i])) {
+        val += input[i];
+        i++;
+      }
+      tokens.push({ type: 'word', value: val });
+      continue;
+    }
+    
+    // Symbol
+    tokens.push({ type: 'symbol', value: char });
+    i++;
+  }
+  return tokens;
+}
+
+function parseCaseBlock(tokens: Token[], startIdx: number, baseIndent: string): { formatted: string, nextIdx: number } {
+  let depth = 0;
+  const whenIndices: number[] = [];
+  const elseIndices: number[] = [];
+  let endIdx = -1;
+  
+  for (let j = startIdx + 1; j < tokens.length; j++) {
+    const tok = tokens[j];
+    if (tok.type === 'word') {
+      const valLower = tok.value.toLowerCase();
+      if (valLower === 'case') {
+        depth++;
+      } else if (valLower === 'end') {
+        if (depth === 0) {
+          endIdx = j;
+          break;
+        } else {
+          depth--;
+        }
+      } else if (valLower === 'when' && depth === 0) {
+        whenIndices.push(j);
+      } else if (valLower === 'else' && depth === 0) {
+        elseIndices.push(j);
+      }
+    }
+  }
+  
+  if (endIdx === -1) {
+    endIdx = tokens.length;
+  }
+  
+  const headerTokens = tokens.slice(startIdx + 1, whenIndices.length > 0 ? whenIndices[0] : (elseIndices.length > 0 ? elseIndices[0] : endIdx));
+  const headerText = rebuildExpressionString(headerTokens, baseIndent);
+  let formatted = "CASE" + (headerText ? " " + headerText : "");
+  
+  for (let k = 0; k < whenIndices.length; k++) {
+    const startOfWhen = whenIndices[k];
+    const endOfWhen = (k + 1 < whenIndices.length) 
+      ? whenIndices[k + 1] 
+      : (elseIndices.length > 0 ? elseIndices[0] : endIdx);
+    
+    const whenTokens = tokens.slice(startOfWhen, endOfWhen);
+    const whenText = rebuildExpressionString(whenTokens, baseIndent + "    ");
+    formatted += "\n" + baseIndent + "    " + whenText;
+  }
+  
+  if (elseIndices.length > 0) {
+    const elseTokens = tokens.slice(elseIndices[0], endIdx);
+    const elseText = rebuildExpressionString(elseTokens, baseIndent + "    ");
+    formatted += "\n" + baseIndent + "    " + elseText;
+  }
+  
+  formatted += "\n" + baseIndent + "END";
+  return { formatted, nextIdx: endIdx + 1 };
+}
+
+function rebuildExpressionString(exprTokens: Token[], baseIndent: string): string {
+  let s = "";
+  let lastWasWordOrString = false;
+  for (let i = 0; i < exprTokens.length; i++) {
+    const tok = exprTokens[i];
+    if (tok.type === 'whitespace') {
+      continue;
+    }
+    
+    if (tok.type === 'word' && tok.value.toLowerCase() === 'case') {
+      const { formatted, nextIdx } = parseCaseBlock(exprTokens, i, baseIndent);
+      if (s.length > 0 && !s.endsWith(" ") && !s.endsWith("(")) {
+        s += " ";
+      }
+      s += formatted;
+      i = nextIdx - 1;
+      lastWasWordOrString = false;
+      continue;
+    }
+    
+    const val = tok.value;
+    const isWordOrString = tok.type === 'word' || tok.type === 'string';
+    
+    if (s.length > 0) {
+      const lastChar = s[s.length - 1];
+      
+      let needSpace = false;
+      if (val === ',' || val === ')' || val === '.' || val === '(') {
+        needSpace = false;
+      } else if (lastChar === '(' || lastChar === '.') {
+        needSpace = false;
+      } else if (isWordOrString && lastWasWordOrString) {
+        needSpace = true;
+      } else if ("+-*/%=<>".includes(lastChar) || "+-*/%=<>".includes(val[0])) {
+        needSpace = true;
+      } else if (lastWasWordOrString || isWordOrString) {
+        needSpace = true;
+      }
+      
+      if (needSpace && !s.endsWith(" ")) {
+        s += " ";
+      }
+    }
+    
+    s += val;
+    lastWasWordOrString = isWordOrString;
+  }
+  return s;
+}
+
+export function formatCaseInExpression(expr: string, baseIndent: string): string {
+  if (!expr.toLowerCase().includes("case")) {
+    return baseIndent + expr;
+  }
+  
+  const tokens = tokenize(expr);
+  const hasCaseWord = tokens.some(t => t.type === 'word' && t.value.toLowerCase() === 'case');
+  if (!hasCaseWord) {
+    return baseIndent + expr;
+  }
+  
+  const formatted = rebuildExpressionString(tokens, baseIndent);
+  return baseIndent + formatted;
 }
