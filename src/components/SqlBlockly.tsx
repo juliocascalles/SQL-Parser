@@ -34,7 +34,7 @@ const BLOCKS_JSON = [
     ],
     "message3": "GROUP BY %1",
     "args3": [
-      { "type": "input_value", "name": "GROUP_BY", "check": "GroupByItem" }
+      { "type": "input_value", "name": "GROUP_BY", "check": ["GroupByItem", "HavingItem"] }
     ],
     "message4": "ORDER BY %1",
     "args4": [
@@ -121,11 +121,46 @@ const BLOCKS_JSON = [
     "message0": "%1 %2",
     "args0": [
       { "type": "field_input", "name": "FIELD_NAME", "text": "category" },
-      { "type": "input_value", "name": "NEXT", "check": "GroupByItem" }
+      { "type": "input_value", "name": "NEXT", "check": ["GroupByItem", "HavingItem"] }
     ],
     "output": "GroupByItem",
     "colour": "#f59e0b",
     "tooltip": "Coluna para agrupamento (GROUP BY)",
+    "helpUrl": ""
+  },
+  {
+    "type": "sql_having_item",
+    "message0": "HAVING %1 ( %2 ) %3 %4",
+    "args0": [
+      {
+        "type": "field_dropdown",
+        "name": "FUNC_NAME",
+        "options": [
+          ["COUNT", "COUNT"],
+          ["SUM", "SUM"],
+          ["AVG", "AVG"],
+          ["MAX", "MAX"],
+          ["MIN", "MIN"]
+        ]
+      },
+      { "type": "field_input", "name": "PARAM", "text": "*" },
+      {
+        "type": "field_dropdown",
+        "name": "OPERATOR",
+        "options": [
+          ["=", "="],
+          [">", ">"],
+          ["<", "<"],
+          [">=", ">="],
+          ["<=", "<="],
+          ["<>", "<>"]
+        ]
+      },
+      { "type": "field_input", "name": "VALUE", "text": "10" }
+    ],
+    "output": "HavingItem",
+    "colour": "#f59e0b",
+    "tooltip": "Cláusula HAVING para filtrar grupos baseada em funções de agregação",
     "helpUrl": ""
   },
   {
@@ -308,6 +343,7 @@ const TOOLBOX_XML = `
     </category>
     <category name="Grupo" colour="45">
       <block type="sql_group_by_item"></block>
+      <block type="sql_having_item"></block>
     </category>
     <category name="Ordem" colour="280">
       <block type="sql_order_by_item"></block>
@@ -669,8 +705,9 @@ export function queryBlockToSql(queryBlock: any): string {
   const whereBlock = queryBlock.getInputTargetBlock("WHERE");
   const whereClause = parseConditionBlock(whereBlock);
 
-  // 4. GROUP BY fields
+  // 4. GROUP BY fields and HAVING condition
   const groupByArray: string[] = [];
+  let havingClause = "";
   let gbBlock = queryBlock.getInputTargetBlock("GROUP_BY");
   while (gbBlock) {
     if (gbBlock.type === "sql_group_by_item") {
@@ -679,6 +716,13 @@ export function queryBlockToSql(queryBlock: any): string {
         groupByArray.push(gbName);
       }
       gbBlock = gbBlock.getInputTargetBlock("NEXT");
+    } else if (gbBlock.type === "sql_having_item") {
+      const funcName = gbBlock.getFieldValue("FUNC_NAME") || "COUNT";
+      const param = gbBlock.getFieldValue("PARAM")?.trim() || "*";
+      const op = gbBlock.getFieldValue("OPERATOR") || ">";
+      const val = gbBlock.getFieldValue("VALUE")?.trim() || "0";
+      havingClause = `${funcName}(${param}) ${op} ${val}`;
+      break;
     } else {
       break;
     }
@@ -711,6 +755,9 @@ export function queryBlockToSql(queryBlock: any): string {
   }
   if (groupBy) {
     sql += ` GROUP BY ${groupBy}`;
+  }
+  if (havingClause) {
+    sql += ` HAVING ${havingClause}`;
   }
   if (orderByClause) {
     sql += ` ORDER BY ${orderByClause}`;
@@ -856,9 +903,9 @@ export function populateQueryBlock(queryBlock: any, data: any, ws: any) {
     }
   }
 
-  // 4. GROUP BY fields statement
+  // 4. GROUP BY fields statement and HAVING condition
+  let parentInputConnection = queryBlock.getInput("GROUP_BY")?.connection;
   if (data.groupByFields && data.groupByFields.length > 0) {
-    let parentInputConnection = queryBlock.getInput("GROUP_BY")?.connection;
     for (const gbField of data.groupByFields) {
       const cleanGbField = gbField.trim();
       if (!cleanGbField) continue;
@@ -870,6 +917,33 @@ export function populateQueryBlock(queryBlock: any, data: any, ws: any) {
       if (parentInputConnection && gbItemBlock.outputConnection) {
         parentInputConnection.connect(gbItemBlock.outputConnection);
         parentInputConnection = gbItemBlock.getInput("NEXT")?.connection;
+      }
+    }
+  }
+
+  // 4b. HAVING condition
+  if (data.havingCondition) {
+    const cleanHaving = data.havingCondition.trim();
+    if (cleanHaving) {
+      const havingRegex = /^([A-Za-z0-9_]+)\s*\(([^)]*)\)\s*([>=<]+)\s*(.*)$/i;
+      const match = havingRegex.exec(cleanHaving);
+      if (match) {
+        const funcName = match[1].toUpperCase();
+        const param = match[2].trim() || "*";
+        const op = match[3].trim();
+        const val = match[4].trim();
+
+        const havingBlock = ws.newBlock("sql_having_item");
+        havingBlock.initSvg();
+        havingBlock.render();
+        havingBlock.setFieldValue(funcName, "FUNC_NAME");
+        havingBlock.setFieldValue(param, "PARAM");
+        havingBlock.setFieldValue(op, "OPERATOR");
+        havingBlock.setFieldValue(val, "VALUE");
+
+        if (parentInputConnection && havingBlock.outputConnection) {
+          parentInputConnection.connect(havingBlock.outputConnection);
+        }
       }
     }
   }
@@ -1507,7 +1581,7 @@ export default function SqlBlockly({ onSqlChange, editorTriggerRef }: SqlBlockly
             </div>
           </div>
 
-          {/* Analytical (GROUP BY / ORDER BY) */}
+          {/* Analytical (GROUP BY / HAVING / ORDER BY) */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 p-2 bg-amber-50/55 border border-amber-100 rounded-lg flex-1">
             <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider px-1 shrink-0">ANÁLISE</span>
             <div className="flex flex-wrap gap-1.5">
@@ -1518,6 +1592,14 @@ export default function SqlBlockly({ onSqlChange, editorTriggerRef }: SqlBlockly
               >
                 <Layers size={12} className="text-amber-500" />
                 <span>+ GROUP BY</span>
+              </button>
+              <button
+                id="btn-add-having"
+                onClick={() => spawnBlock("sql_having_item")}
+                className="flex items-center justify-center gap-1.5 px-2.5 py-1 bg-white hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-md text-xs font-semibold cursor-pointer active:scale-95 transition-all shadow-sm shrink-0"
+              >
+                <Filter size={12} className="text-amber-500" />
+                <span>+ HAVING</span>
               </button>
               <button
                 id="btn-add-orderby"

@@ -843,6 +843,7 @@ export function extractRawClausesWithComments(sql: string): Record<string, strin
     { key: "FROM", regex: /^FROM\b/i },
     { key: "WHERE", regex: /^WHERE\b/i },
     { key: "GROUP BY", regex: /^GROUP\s+BY\b/i },
+    { key: "HAVING", regex: /^HAVING\b/i },
     { key: "ORDER BY", regex: /^ORDER\s+BY\b/i },
     { key: "LIMIT", regex: /^LIMIT\b/i }
   ];
@@ -953,6 +954,7 @@ export function extractRawClausesWithComments(sql: string): Record<string, strin
     FROM: "",
     WHERE: "",
     GROUP_BY: "",
+    HAVING: "",
     ORDER_BY: "",
     LIMIT: ""
   };
@@ -981,14 +983,18 @@ export function optimizeSqlQuery(sql: string): string {
   try {
     let parsed = parseSqlStringToData(sql);
     
-    // Load raw WHERE condition preserving comments
+    // Load raw WHERE and HAVING clauses preserving comments
     const rawClauses = extractRawClausesWithComments(sql);
     if (rawClauses.WHERE) {
       parsed.whereCondition = rawClauses.WHERE;
     }
+    if (rawClauses.HAVING) {
+      parsed.havingCondition = rawClauses.HAVING;
+    }
     
-    // 1. Run recursive condition optimizer on WHERE string and each JOIN's ON conditions first
+    // 1. Run recursive condition optimizer on WHERE/HAVING strings and each JOIN's ON conditions first
     const optimizedWhere = parsed.whereCondition ? optimizeCondition(parsed.whereCondition) : "";
+    const optimizedHaving = parsed.havingCondition ? optimizeCondition(parsed.havingCondition) : "";
     
     const optimizedJoins = parsed.joins.map(join => {
       const optimizedOn = join.onCondition ? optimizeCondition(join.onCondition) : "";
@@ -1001,6 +1007,7 @@ export function optimizeSqlQuery(sql: string): string {
     parsed = {
       ...parsed,
       whereCondition: optimizedWhere,
+      havingCondition: optimizedHaving,
       joins: optimizedJoins
     };
 
@@ -1010,9 +1017,12 @@ export function optimizeSqlQuery(sql: string): string {
     // 3. Convert subqueries to JOIN relations LAST (as requested)
     parsed = optimizeSubqueries(parsed);
     
-    // Run condition optimization one last time on final where strings
+    // Run condition optimization one last time on final where/having strings
     if (parsed.whereCondition) {
       parsed.whereCondition = optimizeCondition(parsed.whereCondition);
+    }
+    if (parsed.havingCondition) {
+      parsed.havingCondition = optimizeCondition(parsed.havingCondition);
     }
     parsed.joins = parsed.joins.map(join => ({
       ...join,
@@ -1034,6 +1044,10 @@ export function optimizeSqlQuery(sql: string): string {
     
     if (parsed.groupByFields.length > 0) {
       optimizedSql += ` GROUP BY ${parsed.groupByFields.join(", ")}`;
+    }
+
+    if (parsed.havingCondition) {
+      optimizedSql += ` HAVING ${parsed.havingCondition}`;
     }
     
     if (parsed.orderByFields.length > 0) {
@@ -1099,6 +1113,13 @@ export function formatSqlWithIndentation(sql: string): string {
         const comma = idx < parsed.groupByFields.length - 1 ? "," : "";
         lines.push(`    ${g.trim()}${comma}`);
       });
+    }
+
+    // 5b. HAVING
+    if (parsed.havingCondition && parsed.havingCondition.trim()) {
+      lines.push("HAVING");
+      const formattedHaving = formatWhereConditionWithIndentation(parsed.havingCondition, "    ");
+      lines.push(...formattedHaving);
     }
     
     // 6. ORDER BY

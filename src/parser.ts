@@ -19,6 +19,7 @@ export interface ParsedSqlQuery {
   joins: JoinData[];
   whereCondition: string;
   groupByFields: string[];
+  havingCondition: string;
   orderByFields: OrderByItem[];
   limit: string;
 }
@@ -111,6 +112,7 @@ export function extractRawClauses(sql: string): Record<string, string> {
     { key: "FROM", regex: /\bFROM\b/i },
     { key: "WHERE", regex: /\bWHERE\b/i },
     { key: "GROUP BY", regex: /\bGROUP\s+BY\b/i },
+    { key: "HAVING", regex: /\bHAVING\b/i },
     { key: "ORDER BY", regex: /\bORDER\s+BY\b/i },
     { key: "LIMIT", regex: /\bLIMIT\b/i }
   ];
@@ -219,6 +221,7 @@ export function extractRawClauses(sql: string): Record<string, string> {
     FROM: "",
     WHERE: "",
     GROUP_BY: "",
+    HAVING: "",
     ORDER_BY: "",
     LIMIT: ""
   };
@@ -333,6 +336,9 @@ export function parseSqlStringToData(sql: string): ParsedSqlQuery {
   // 4. GROUP BY fields split by comma
   const groupByFields = clauses.GROUP_BY ? splitSmart(clauses.GROUP_BY) : [];
 
+  // New: HAVING clause
+  const havingCondition = clauses.HAVING || "";
+
   // 5. ORDER BY fields split by comma, with sorting parsed: e.g. "age DESC, name ASC"
   const orderByFields: OrderByItem[] = [];
   if (clauses.ORDER_BY) {
@@ -360,6 +366,7 @@ export function parseSqlStringToData(sql: string): ParsedSqlQuery {
     joins,
     whereCondition,
     groupByFields,
+    havingCondition,
     orderByFields,
     limit
   };

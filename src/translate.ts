@@ -647,6 +647,39 @@ export function parseAggFields(selectFields: string[]): AggMap[] {
   return aggs;
 }
 
+export function getHavingFieldAliasAndParam(havingCondition: string, aggs: AggMap[]): { fieldAlias: string; op: string; value: string } {
+  // E.g. "COUNT(*) > 10" or "SUM(column) <= 5"
+  const regex = /^([A-Za-z0-9_]+)\s*\(([^)]*)\)\s*([>=<]+)\s*(.*)$/i;
+  const match = regex.exec(havingCondition);
+  if (match) {
+    const opRaw = match[1].toUpperCase();
+    const colRaw = match[2].trim();
+    const operator = match[3].trim();
+    const valueStr = match[4].trim();
+
+    const matchingAgg = aggs.find(a => {
+      let opMatches = false;
+      if (opRaw === "SUM") opMatches = a.op === "$sum";
+      else if (opRaw === "AVG") opMatches = a.op === "$avg";
+      else if (opRaw === "MAX") opMatches = a.op === "$max";
+      else if (opRaw === "MIN") opMatches = a.op === "$min";
+      else if (opRaw === "COUNT") opMatches = a.op === "$sum";
+
+      let fieldMatches = false;
+      const expectedField = colRaw && colRaw !== "*" ? `$${cleanFieldName(colRaw)}` : "1";
+      fieldMatches = a.field === expectedField;
+
+      return opMatches && fieldMatches;
+    });
+
+    const fieldAlias = matchingAgg ? matchingAgg.alias : `${opRaw.toLowerCase()}_${cleanFieldName(colRaw || "count")}`;
+    return { fieldAlias, op: operator, value: valueStr };
+  }
+
+  // Fallback to literal
+  return { fieldAlias: havingCondition, op: "", value: "" };
+}
+
 // Translation helpers for MongoDB
 export function translateWhereForMongoRec(whereStr: string): string {
   let clean = stripOuterParens(whereStr);
@@ -1363,11 +1396,31 @@ export function translateSql(sql: string, targetLanguage: string): string {
       const groupStageBody = groupStageParts.map(part => `      ${part}`).join(",\n");
       const groupStage = `  {\n    $group: {\n${groupStageBody}\n    }\n  }`;
       
+      const mongoOperators: Record<string, string> = {
+        ">": "$gt",
+        "<": "$lt",
+        ">=": "$gte",
+        "<=": "$lte",
+        "=": "$eq",
+        "<>": "$ne"
+      };
+
+      let havingStage = "";
+      if (parsed.havingCondition) {
+        const havingInfo = getHavingFieldAliasAndParam(parsed.havingCondition, aggs);
+        if (havingInfo.op) {
+          const mOp = mongoOperators[havingInfo.op] || "$eq";
+          const numValue = parseFloat(havingInfo.value);
+          const formattedValue = isNaN(numValue) ? `"${havingInfo.value}"` : numValue;
+          havingStage = `,\n  {\n    $match: { ${havingInfo.fieldAlias}: { ${mOp}: ${formattedValue} } }\n  }`;
+        }
+      }
+
       if (hasWhere) {
         const whereMongo = translateWhereForMongo(parsed.whereCondition, "      ");
-        resultMongo = `db.${tbl}.aggregate([\n  {\n    $match: ${whereMongo}\n  },\n${groupStage}\n])`;
+        resultMongo = `db.${tbl}.aggregate([\n  {\n    $match: ${whereMongo}\n  },\n${groupStage}${havingStage}\n])`;
       } else {
-        resultMongo = `db.${tbl}.aggregate([\n${groupStage}\n])`;
+        resultMongo = `db.${tbl}.aggregate([\n${groupStage}${havingStage}\n])`;
       }
     } else {
       // No Group By -> Rule 1.1 / 1.2
@@ -1591,6 +1644,14 @@ export function translateSql(sql: string, targetLanguage: string): string {
     }
     
     resultPandas += `df = ${chain}`;
+
+    if (parsed.havingCondition) {
+      const aggs = parseAggFields(parsed.selectFields);
+      const havingInfo = getHavingFieldAliasAndParam(parsed.havingCondition, aggs);
+      if (havingInfo.op) {
+        resultPandas += `\n\n# Filtrar grupos (HAVING)\ndf = df[df['${havingInfo.fieldAlias}'] ${havingInfo.op} ${havingInfo.value}]`;
+      }
+    }
 
     const lines = resultPandas.split("\n");
     const formattedLines = lines.flatMap(line => {
