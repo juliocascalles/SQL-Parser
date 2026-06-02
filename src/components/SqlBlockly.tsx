@@ -1373,7 +1373,58 @@ export default function SqlBlockly({ onSqlChange, editorTriggerRef }: SqlBlockly
       resizeObserver.observe(containerRef.current.parentElement);
     }
 
+    const containerEl = containerRef.current;
+    const handleNativeInteraction = (e: Event) => {
+      const target = e.target as HTMLElement;
+      if (!target) return;
+      
+      let isTrashClick = false;
+      if (typeof target.closest === "function" && (target.closest('[class*="trash"]') || target.closest('[class*="Trash"]'))) {
+        isTrashClick = true;
+      } else if (target.id && target.id.toLowerCase().includes('trash')) {
+        isTrashClick = true;
+      } else {
+        const className: any = (target as any).className;
+        if (className) {
+          if (typeof className === 'string' && className.toLowerCase().includes('trash')) {
+            isTrashClick = true;
+          } else if (typeof className === 'object' && 'baseVal' in className) {
+            const baseVal = className.baseVal;
+            if (baseVal && typeof baseVal === 'string' && baseVal.toLowerCase().includes('trash')) {
+              isTrashClick = true;
+            }
+          }
+        }
+      }
+      
+      if (isTrashClick) {
+        if (workspaceRef.current) {
+          const ws = workspaceRef.current;
+          const allBlocks = ws.getTopBlocks(true);
+          const queryBlock = allBlocks.find((b: any) => b.type === "sql_query");
+          if (queryBlock) {
+            ws.select(queryBlock);
+            if (typeof queryBlock.dispose === "function") {
+              queryBlock.dispose(true);
+            } else {
+              ws.clear();
+            }
+            onWorkspaceChange();
+          }
+        }
+      }
+    };
+
+    if (containerEl) {
+      containerEl.addEventListener("click", handleNativeInteraction, true);
+      containerEl.addEventListener("mousedown", handleNativeInteraction, true);
+    }
+
     return () => {
+      if (containerEl) {
+        containerEl.removeEventListener("click", handleNativeInteraction, true);
+        containerEl.removeEventListener("mousedown", handleNativeInteraction, true);
+      }
       workspace.removeChangeListener(onWorkspaceChange);
       workspace.dispose();
       resizeObserver.disconnect();

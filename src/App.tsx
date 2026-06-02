@@ -13,7 +13,9 @@ import {
   ArrowRight,
   Settings,
   HelpCircle,
-  Lightbulb
+  Lightbulb,
+  Upload,
+  Download
 } from "lucide-react";
 import SqlBlockly from "./components/SqlBlockly";
 import { translateSql } from "./translate";
@@ -92,6 +94,54 @@ export default function App() {
 
   // Reference callback to invoke the Block reconstruction on SqlBlockly
   const blocklyRebuiltCallbackRef = useRef<((sql: string) => void) | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleLoadSqlFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith(".sql")) {
+      showFeedback("error", "Por favor, selecione apenas arquivos com extensão .SQL");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      if (text) {
+        setSqlQuery(text);
+        if (blocklyRebuiltCallbackRef.current) {
+          blocklyRebuiltCallbackRef.current(text);
+        }
+        showFeedback("success", "Arquivo SQL carregado com sucesso!");
+      }
+    };
+    reader.readAsText(file);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const triggerFileLoad = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleSaveSqlFile = () => {
+    if (!sqlQuery.trim()) {
+      showFeedback("error", "Não há nenhuma query para salvar!");
+      return;
+    }
+    const blob = new Blob([sqlQuery], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "query.sql";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showFeedback("success", "Sua query foi baixada com sucesso!");
+  };
 
   // Triggered on Blockly block configuration change
   const handleBlocklySqlChange = (newSql: string) => {
@@ -301,17 +351,51 @@ export default function App() {
                   </h2>
                 </div>
 
-                {/* Center: Discreet Optimization Button */}
-                <div className="flex items-center justify-center">
+                {/* Center: Query Tools (Optimize, Load, Save) */}
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  {/* Button: Optimize */}
                   <button
                     id="optimize-query-btn"
                     onClick={handleOptimizeQuery}
-                    className="flex items-center gap-1.5 px-3 py-1 bg-slate-950 hover:bg-cyan-950/60 text-slate-400 hover:text-cyan-400 border border-slate-800 hover:border-cyan-800/80 rounded-lg text-xs font-semibold cursor-pointer active:scale-95 transition-all select-none group shadow-inner"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-950 hover:bg-cyan-950/60 text-slate-400 hover:text-cyan-400 border border-slate-800 hover:border-cyan-800/80 rounded-lg text-xs font-semibold cursor-pointer active:scale-95 transition-all select-none group shadow-inner"
                     title="otimização"
                     aria-label="otimização"
                   >
-                    <Lightbulb className="w-3.5 h-3.5 text-yellow-500 group-hover:text-cyan-400 transition-colors animate-pulse" />
+                    <Lightbulb className="w-3.5 h-3.5 text-yellow-550 group-hover:text-cyan-400 transition-colors animate-pulse" />
                     <span>Otimizar Query</span>
+                  </button>
+
+                  {/* Hidden File Input for Loading */}
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleLoadSqlFile}
+                    accept=".sql"
+                    className="hidden"
+                  />
+
+                  {/* Button: Load SQL */}
+                  <button
+                    id="load-query-btn"
+                    onClick={triggerFileLoad}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-950 hover:bg-emerald-950/60 text-slate-400 hover:text-emerald-400 border border-slate-800 hover:border-emerald-800/80 rounded-lg text-xs font-semibold cursor-pointer active:scale-95 transition-all select-none group shadow-inner"
+                    title="Carregar arquivo .sql do computador"
+                    aria-label="Carregar query"
+                  >
+                    <Upload className="w-3.5 h-3.5 text-emerald-500 group-hover:text-emerald-400 transition-colors" />
+                    <span>Carregar .SQL</span>
+                  </button>
+
+                  {/* Button: Save SQL */}
+                  <button
+                    id="save-query-btn"
+                    onClick={handleSaveSqlFile}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-950 hover:bg-sky-950/60 text-slate-400 hover:text-sky-400 border border-slate-800 hover:border-sky-800/80 rounded-lg text-xs font-semibold cursor-pointer active:scale-95 transition-all select-none group shadow-inner"
+                    title="Baixar arquivo .sql para o computador"
+                    aria-label="Salvar query"
+                  >
+                    <Download className="w-3.5 h-3.5 text-sky-500 group-hover:text-sky-400 transition-colors" />
+                    <span>Salvar .SQL</span>
                   </button>
                 </div>
 
