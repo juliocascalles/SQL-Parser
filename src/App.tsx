@@ -15,11 +15,15 @@ import {
   HelpCircle,
   Lightbulb,
   Upload,
-  Download
+  Download,
+  Trophy,
+  Play
 } from "lucide-react";
 import SqlBlockly from "./components/SqlBlockly";
 import { translateSql } from "./translate";
 import { optimizeSqlQuery, formatSqlWithIndentation } from "./optimization";
+import ExerciseModal from "./components/ExerciseModal";
+import { EXERCISES } from "./training";
 
 // Define supported translation target languages
 interface LanguageOption {
@@ -92,6 +96,10 @@ export default function App() {
   const [isCopied, setIsCopied] = useState<boolean>(false);
   const [indentFormat, setIndentFormat] = useState<boolean>(false);
 
+  // Exercise & in-memory runner state hooks
+  const [activeExerciseId, setActiveExerciseId] = useState<string | null>("customers");
+  const [isExerciseModalOpen, setIsExerciseModalOpen] = useState<boolean>(false);
+
   // Reference callback to invoke the Block reconstruction on SqlBlockly
   const blocklyRebuiltCallbackRef = useRef<((sql: string) => void) | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -152,23 +160,32 @@ export default function App() {
     }
   };
 
-  // Pre-configured query examples to help the user test instantly
-  const loadExample = (type: "customers" | "sales" | "complex") => {
-    let query = "";
-    if (type === "customers") {
-      query = "SELECT name, email FROM customers WHERE age >= 21 ORDER BY name ASC LIMIT 15";
-    } else if (type === "sales") {
-      query = "SELECT product, quantity FROM sales WHERE quantity > 100 GROUP BY product ORDER BY quantity DESC LIMIT 5";
+  // Load query corresponding to an interactive exercise (and optionally open the modal)
+  const loadExercise = (id: string, autoOpen = true) => {
+    const exercise = EXERCISES.find(ex => ex.id === id);
+    if (!exercise) return;
+
+    const isDifferent = activeExerciseId !== id;
+    setActiveExerciseId(id);
+
+    const hasNoQuery = !sqlQuery.trim();
+    if (hasNoQuery || isDifferent) {
+      const query = exercise.templateQuery;
+      const finalQuery = indentFormat ? formatSqlWithIndentation(query) : query;
+      setSqlQuery(finalQuery);
+
+      // Auto-update blockly
+      if (blocklyRebuiltCallbackRef.current) {
+        blocklyRebuiltCallbackRef.current(query);
+      }
+      showFeedback("success", `Exercício "${exercise.title.split(": ")[1]}" carregado com pistas!`);
     } else {
-      query = "SELECT item, price FROM products WHERE category = 'technology' AND price < 1500 ORDER BY price DESC";
+      showFeedback("success", `Exercício alterado para "${exercise.title.split(": ")[1]}". Mantendo sua query atual.`);
     }
-    const finalQuery = indentFormat ? formatSqlWithIndentation(query) : query;
-    setSqlQuery(finalQuery);
-    // Auto-update blockly
-    if (blocklyRebuiltCallbackRef.current) {
-      blocklyRebuiltCallbackRef.current(query);
+
+    if (autoOpen) {
+      setIsExerciseModalOpen(true);
     }
-    showFeedback("success", "Exemplo carregado! Clique em 'Atualizar' se deseja remontar blocos.");
   };
 
   const showFeedback = (type: "success" | "error", text: string) => {
@@ -303,31 +320,55 @@ export default function App() {
             </div>
           </div>
 
-          {/* Quick Examples Loader */}
-          <div className="flex items-center gap-2 bg-slate-950/80 p-1 rounded-xl border border-slate-850">
-            <span className="text-[10px] font-semibold text-slate-400 px-2 uppercase tracking-wider">
-              Exemplos:
+          {/* Quick Exercises Loader */}
+          <div className="flex flex-wrap items-center gap-2 bg-[#090d16] p-1.5 rounded-xl border border-slate-850 shadow-inner">
+            <span className="text-[10px] font-semibold text-amber-400 px-2 uppercase tracking-wider flex items-center gap-1 select-none">
+              <Trophy className="w-3.5 h-3.5 shrink-0" />
+              Exercícios:
             </span>
             <button
               id="example-btn-customers"
-              onClick={() => loadExample("customers")}
-              className="px-2.5 py-1 text-xs font-semibold text-slate-300 hover:text-cyan-400 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 transition-all cursor-pointer"
+              onClick={() => loadExercise("customers")}
+              className={`px-2.5 py-1 text-xs font-semibold rounded-lg border transition-all cursor-pointer select-none ${
+                activeExerciseId === "customers"
+                  ? "bg-amber-950/40 border-amber-500/60 text-amber-300 shadow"
+                  : "bg-slate-900 border-slate-800 text-slate-300 hover:text-amber-400 hover:border-slate-700"
+              }`}
             >
               Clientes
             </button>
             <button
               id="example-btn-sales"
-              onClick={() => loadExample("sales")}
-              className="px-2.5 py-1 text-xs font-semibold text-slate-300 hover:text-cyan-400 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 transition-all cursor-pointer"
+              onClick={() => loadExercise("sales")}
+              className={`px-2.5 py-1 text-xs font-semibold rounded-lg border transition-all cursor-pointer select-none ${
+                activeExerciseId === "sales"
+                  ? "bg-amber-950/40 border-amber-500/60 text-amber-300 shadow"
+                  : "bg-slate-900 border-slate-800 text-slate-300 hover:text-amber-400 hover:border-slate-700"
+              }`}
             >
               Vendas
             </button>
             <button
               id="example-btn-complex"
-              onClick={() => loadExample("complex")}
-              className="px-2.5 py-1 text-xs font-semibold text-slate-300 hover:text-cyan-400 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 transition-all cursor-pointer"
+              onClick={() => loadExercise("complex")}
+              className={`px-2.5 py-1 text-xs font-semibold rounded-lg border transition-all cursor-pointer select-none ${
+                activeExerciseId === "complex"
+                  ? "bg-amber-950/40 border-amber-500/60 text-amber-300 shadow"
+                  : "bg-slate-900 border-slate-800 text-slate-300 hover:text-amber-400 hover:border-slate-700"
+              }`}
             >
               Filtro Tech
+            </button>
+            <button
+              id="example-btn-pessoas"
+              onClick={() => loadExercise("pessoas")}
+              className={`px-2.5 py-1 text-xs font-semibold rounded-lg border transition-all cursor-pointer select-none ${
+                activeExerciseId === "pessoas"
+                  ? "bg-amber-950/40 border-amber-500/60 text-amber-300 shadow"
+                  : "bg-slate-900 border-slate-800 text-slate-300 hover:text-amber-400 hover:border-slate-700"
+              }`}
+            >
+              HAVING
             </button>
           </div>
         </div>
@@ -464,7 +505,7 @@ export default function App() {
                     title="Atualiza os blocos visuais para corresponder ao código escrito acima"
                   >
                     <RefreshCw className="w-4 h-4 text-slate-400" />
-                    Atualizar Blocos
+                    <span>Atualizar Blocos</span>
                   </button>
 
                   {/* Button 2.2: Traduzir */}
@@ -472,7 +513,7 @@ export default function App() {
                     id="translate-btn"
                     onClick={handleTranslateQuery}
                     disabled={isLoading}
-                    className={`w-full py-3 px-4 text-slate-950 font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition-all shadow-lg shadow-cyan-950/25 cursor-pointer select-none ${
+                    className={`w-full py-3 px-4 text-slate-950 font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition-all shadow-lg active:scale-95 cursor-pointer select-none ${
                       isLoading
                         ? "bg-cyan-950 text-cyan-700 cursor-not-allowed border border-cyan-900"
                         : "bg-gradient-to-r from-cyan-400 to-indigo-500 hover:from-cyan-350 hover:to-indigo-400"
@@ -483,7 +524,7 @@ export default function App() {
                     ) : (
                       <Sparkles className="w-4 h-4" />
                     )}
-                    {isLoading ? "Traduzindo..." : "Traduzir Query"}
+                    <span>Traduzir Query</span>
                   </button>
                 </div>
               </div>
@@ -622,6 +663,22 @@ export default function App() {
         </section>
 
       </main>
+
+      {/* Exercises In-Memory Simulator Modal */}
+      <ExerciseModal
+        isOpen={isExerciseModalOpen}
+        onClose={() => setIsExerciseModalOpen(false)}
+        currentSqlQuery={sqlQuery}
+        activeExerciseId={activeExerciseId}
+        setActiveExerciseId={setActiveExerciseId}
+        onLoadExerciseSql={(q) => {
+          const finalQuery = indentFormat ? formatSqlWithIndentation(q) : q;
+          setSqlQuery(finalQuery);
+          if (blocklyRebuiltCallbackRef.current) {
+            blocklyRebuiltCallbackRef.current(q);
+          }
+        }}
+      />
     </div>
   );
 }
