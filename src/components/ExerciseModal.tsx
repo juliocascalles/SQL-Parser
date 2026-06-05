@@ -167,7 +167,7 @@ export default function ExerciseModal({
       );
     }
 
-    const headers = Object.keys(data[0]);
+    const headers = Object.keys(data[0]).filter(h => h.toLowerCase() !== "imagem");
 
     return (
       <div className="overflow-x-auto border border-slate-850 rounded-xl max-h-[300px] overflow-y-auto w-full shadow-inner bg-[#05070c]/50">

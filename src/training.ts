@@ -182,7 +182,7 @@ export const EXERCISES: Exercise[] = [
     title: "Exercício Especial: Encontre o Suspeito",
     description: "Um crime foi cometido! Analise as pistas fornecidas e monte uma consulta SQL na tabela 'suspeitos' para identificar o suspeito com os atributos exatos descritos.",
     query: "SELECT * FROM suspeitos WHERE id = 1",
-    templateQuery: "SELECT nome, sexo, cor_cabelo, tamanho_cabelo, olhar, bigode, barba, pele FROM suspeitos",
+    templateQuery: "SELECT * FROM suspeitos WHERE sexo = 'feminino' AND pele = 'branca' AND cor_cabelo = 'castanho'",
     targetTable: "suspeitos"
   }
 ];

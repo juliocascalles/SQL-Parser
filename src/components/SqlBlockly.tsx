@@ -386,7 +386,7 @@ export function parseConditionBlock(block: any): string {
     const left = parseConditionBlock(leftBlock);
     const right = parseConditionBlock(rightBlock);
     if (left && right) {
-      return `(${left} AND ${right})`;
+      return `${left} AND ${right}`;
     } else if (left) {
       return left;
     } else if (right) {
