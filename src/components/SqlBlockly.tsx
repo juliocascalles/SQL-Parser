@@ -1326,7 +1326,14 @@ export default function SqlBlockly({ onSqlChange, editorTriggerRef }: SqlBlockly
       const y = -scrollY / scale + 100 + (Math.random() * 40 - 20);
 
       block.moveBy(x, y);
-      ws.select(block);
+      if (typeof (block as any).select === "function") {
+        (block as any).select();
+      } else {
+        const selectionModel = (ws as any).getSelectionModel?.();
+        if (selectionModel && typeof selectionModel.select === "function") {
+          selectionModel.select(block);
+        }
+      }
       
       onWorkspaceChange();
     } catch (err) {
@@ -1403,7 +1410,14 @@ export default function SqlBlockly({ onSqlChange, editorTriggerRef }: SqlBlockly
           const allBlocks = ws.getTopBlocks(true);
           const queryBlock = allBlocks.find((b: any) => b.type === "sql_query");
           if (queryBlock) {
-            ws.select(queryBlock);
+            if (typeof (queryBlock as any).select === "function") {
+              (queryBlock as any).select();
+            } else {
+              const selectionModel = (ws as any).getSelectionModel?.();
+              if (selectionModel && typeof selectionModel.select === "function") {
+                selectionModel.select(queryBlock);
+              }
+            }
             if (typeof queryBlock.dispose === "function") {
               queryBlock.dispose(true);
             } else {

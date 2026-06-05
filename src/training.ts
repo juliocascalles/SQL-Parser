@@ -1,6 +1,27 @@
 // Database datasets and in-memory SQL execution engine for interactive exercises.
 import { parseSqlStringToData } from "./parser";
 
+import aline_nobre from "../assets/images/aline_nobre.svg";
+import ana_clara from "../assets/images/ana_clara.svg";
+import carlos_oliver from "../assets/images/carlos_oliver.svg";
+import djavan_costa from "../assets/images/djavan_costa.svg";
+import elena_rostova from "../assets/images/elena_rostova.svg";
+import gustavo_lins from "../assets/images/gustavo_lins.svg";
+import igor_cruz from "../assets/images/igor_cruz.svg";
+import jean_pierre from "../assets/images/jean_pierre.svg";
+import juliana_mendes from "../assets/images/juliana_mendes.svg";
+import kenji_tanaka from "../assets/images/kenji_tanaka.svg";
+import leticia_silva from "../assets/images/leticia_silva.svg";
+import marcos_paz from "../assets/images/marcos_paz.svg";
+import mei_lin from "../assets/images/mei_lin.svg";
+import patricia_lima from "../assets/images/patricia_lima.svg";
+import pedro_rocha from "../assets/images/pedro_rocha.svg";
+import roberta_santos from "../assets/images/roberta_santos.svg";
+import rodrigo_faro from "../assets/images/rodrigo_faro.svg";
+import sabrina_sato from "../assets/images/sabrina_sato.svg";
+import thiago_ramos from "../assets/images/thiago_ramos.svg";
+import valeria_garcia from "../assets/images/valeria_garcia.svg";
+
 export const customers = [
   { id: 1, name: "Alice Smith", email: "alice@example.com", age: 24, country: "USA" },
   { id: 2, name: "Bob Johnson", email: "bob@example.com", age: 19, country: "Canada" },
@@ -83,7 +104,43 @@ export const Pessoas = [
   { id: 28, nome: "William Santos", sexo: "Masculino", idade: 33, cidade: "Porto Alegre" },
   { id: 29, nome: "Thiago Ramos", sexo: "Masculino", idade: 31, cidade: "São Paulo" },
   { id: 30, nome: "Felipe Melo", sexo: "Masculino", idade: 28, cidade: "Rio de Janeiro" },
-  { id: 31, nome: "Guilherme Reis", sexo: "Masculino", idade: 22, cidade: "Salvador" }
+  { id: 31, nome: "Guilherme Reis", sexo: "Masculino", idade: 22, city: "Salvador" }
+];
+
+export interface Suspect {
+  id: number;
+  nome: string;
+  sexo: "masculino" | "feminino";
+  cor_cabelo: "preto" | "castanho" | "loiro" | "ruivo";
+  tamanho_cabelo: "longo" | "curto";
+  olhar: "desconfiado" | "piscando" | "arregalado" | "sorridente";
+  bigode: "sim" | "não";
+  barba: "sim" | "não";
+  pele: "branca" | "negra" | "parda" | "amarela";
+  imagem: string;
+}
+
+export const suspeitos: Suspect[] = [
+  { id: 1, nome: "Carlos Oliver", sexo: "masculino", cor_cabelo: "preto", tamanho_cabelo: "curto", olhar: "arregalado", bigode: "sim", barba: "não", pele: "parda", imagem: carlos_oliver },
+  { id: 2, nome: "Ana Clara", sexo: "feminino", cor_cabelo: "ruivo", tamanho_cabelo: "longo", olhar: "desconfiado", bigode: "não", barba: "não", pele: "branca", imagem: ana_clara },
+  { id: 3, nome: "Jean Pierre", sexo: "masculino", cor_cabelo: "loiro", tamanho_cabelo: "curto", olhar: "piscando", bigode: "não", barba: "sim", pele: "branca", imagem: jean_pierre },
+  { id: 4, nome: "Roberta Santos", sexo: "feminino", cor_cabelo: "preto", tamanho_cabelo: "curto", olhar: "sorridente", bigode: "não", barba: "não", pele: "negra", imagem: roberta_santos },
+  { id: 5, nome: "Kenji Tanaka", sexo: "masculino", cor_cabelo: "preto", tamanho_cabelo: "curto", olhar: "sorridente", bigode: "não", barba: "não", pele: "amarela", imagem: kenji_tanaka },
+  { id: 6, nome: "Leticia Silva", sexo: "feminino", cor_cabelo: "loiro", tamanho_cabelo: "longo", olhar: "arregalado", bigode: "não", barba: "não", pele: "parda", imagem: leticia_silva },
+  { id: 7, nome: "Marcos Paz", sexo: "masculino", cor_cabelo: "castanho", tamanho_cabelo: "curto", olhar: "desconfiado", bigode: "sim", barba: "sim", pele: "branca", imagem: marcos_paz },
+  { id: 8, nome: "Elena Rostova", sexo: "feminino", cor_cabelo: "loiro", tamanho_cabelo: "longo", olhar: "piscando", bigode: "não", barba: "não", pele: "branca", imagem: elena_rostova },
+  { id: 9, nome: "Djavan Costa", sexo: "masculino", cor_cabelo: "preto", tamanho_cabelo: "curto", olhar: "sorridente", bigode: "sim", barba: "não", pele: "negra", imagem: djavan_costa },
+  { id: 10, nome: "Mei Lin", sexo: "feminino", cor_cabelo: "preto", tamanho_cabelo: "longo", olhar: "arregalado", bigode: "não", barba: "não", pele: "amarela", imagem: mei_lin },
+  { id: 11, nome: "Igor Cruz", sexo: "masculino", cor_cabelo: "ruivo", tamanho_cabelo: "curto", olhar: "arregalado", bigode: "não", barba: "sim", pele: "parda", imagem: igor_cruz },
+  { id: 12, nome: "Patricia Lima", sexo: "feminino", cor_cabelo: "castanho", tamanho_cabelo: "longo", olhar: "desconfiado", bigode: "não", barba: "não", pele: "branca", imagem: patricia_lima },
+  { id: 13, nome: "Rodrigo Faro", sexo: "masculino", cor_cabelo: "castanho", tamanho_cabelo: "curto", olhar: "piscando", bigode: "não", barba: "não", pele: "branca", imagem: rodrigo_faro },
+  { id: 14, nome: "Sabrina Sato", sexo: "feminino", cor_cabelo: "preto", tamanho_cabelo: "longo", olhar: "sorridente", bigode: "não", barba: "não", pele: "amarela", imagem: sabrina_sato },
+  { id: 15, nome: "Valeria Garcia", sexo: "feminino", cor_cabelo: "ruivo", tamanho_cabelo: "curto", olhar: "arregalado", bigode: "não", barba: "não", pele: "parda", imagem: valeria_garcia },
+  { id: 16, nome: "Gustavo Lins", sexo: "masculino", cor_cabelo: "loiro", tamanho_cabelo: "longo", olhar: "desconfiado", bigode: "não", barba: "não", pele: "branca", imagem: gustavo_lins },
+  { id: 17, nome: "Juliana Mendes", sexo: "feminino", cor_cabelo: "castanho", tamanho_cabelo: "curto", olhar: "piscando", bigode: "não", barba: "não", pele: "negra", imagem: juliana_mendes },
+  { id: 18, nome: "Pedro Rocha", sexo: "masculino", cor_cabelo: "castanho", tamanho_cabelo: "longo", olhar: "sorridente", bigode: "não", barba: "sim", pele: "parda", imagem: pedro_rocha },
+  { id: 19, nome: "Aline Nobre", sexo: "feminino", cor_cabelo: "preto", tamanho_cabelo: "longo", olhar: "piscando", bigode: "não", barba: "não", pele: "negra", imagem: aline_nobre },
+  { id: 20, nome: "Thiago Ramos", sexo: "masculino", cor_cabelo: "ruivo", tamanho_cabelo: "curto", olhar: "sorridente", bigode: "sim", barba: "sim", pele: "amarela", imagem: thiago_ramos }
 ];
 
 export interface Exercise {
@@ -121,14 +178,19 @@ export const EXERCISES: Exercise[] = [
     targetTable: "products"
   },
   {
-    id: "pessoas",
-    title: "Exercício 4: Cláusula HAVING por Gênero",
-    description: "Identifique a contagem de pessoas por gênero agrupando a tabela 'Pessoas' por sexo. Selecione as colunas sexo e a contagem total como 'quantidade' (COUNT(*) AS quantidade) e use HAVING para filtrar apenas gêneros correspondentes a mais de 10 pessoas.",
-    query: "SELECT sexo, COUNT(*) AS quantidade FROM Pessoas GROUP BY sexo HAVING COUNT(*) > 10",
-    templateQuery: "SELECT sexo, idade FROM Pessoas",
-    targetTable: "Pessoas"
+    id: "suspeito",
+    title: "Exercício Especial: Encontre o Suspeito",
+    description: "Um crime foi cometido! Analise as pistas fornecidas e monte uma consulta SQL na tabela 'suspeitos' para identificar o suspeito com os atributos exatos descritos.",
+    query: "SELECT * FROM suspeitos WHERE id = 1",
+    templateQuery: "SELECT nome, sexo, cor_cabelo, tamanho_cabelo, olhar, bigode, barba, pele FROM suspeitos",
+    targetTable: "suspeitos"
   }
 ];
+
+export function getRandomSuspect(): Suspect {
+  const index = Math.floor(Math.random() * suspeitos.length);
+  return suspeitos[index];
+}
 
 export function executeSqlQuery(sql: string): { success: boolean; data?: any[]; error?: string } {
   try {
@@ -148,8 +210,10 @@ export function executeSqlQuery(sql: string): { success: boolean; data?: any[]; 
       sourceData = products;
     } else if (tableNameLower === "pessoas" || tableNameLower === "pessoas") {
       sourceData = Pessoas;
+    } else if (tableNameLower === "suspeitos") {
+      sourceData = suspeitos;
     } else {
-      return { success: false, error: `Tabela '${parsed.mainTable}' não encontrada no banco de dados em memória. As tabelas disponíveis são: customers, sales, products, Pessoas.` };
+      return { success: false, error: `Tabela '${parsed.mainTable}' não encontrada no banco de dados em memória. As tabelas disponíveis são: customers, sales, products, Pessoas, suspeitos.` };
     }
 
     // 1. Filter using WHERE

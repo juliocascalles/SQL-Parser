@@ -23,7 +23,7 @@ import SqlBlockly from "./components/SqlBlockly";
 import { translateSql } from "./translate";
 import { optimizeSqlQuery, formatSqlWithIndentation } from "./optimization";
 import ExerciseModal from "./components/ExerciseModal";
-import { EXERCISES } from "./training";
+import { EXERCISES, getRandomSuspect, Suspect } from "./training";
 
 // Define supported translation target languages
 interface LanguageOption {
@@ -98,6 +98,7 @@ export default function App() {
 
   // Exercise & in-memory runner state hooks
   const [activeExerciseId, setActiveExerciseId] = useState<string | null>("customers");
+  const [targetSuspect, setTargetSuspect] = useState<Suspect | null>(null);
   const [isExerciseModalOpen, setIsExerciseModalOpen] = useState<boolean>(false);
 
   // Reference callback to invoke the Block reconstruction on SqlBlockly
@@ -165,6 +166,10 @@ export default function App() {
     const exercise = EXERCISES.find(ex => ex.id === id);
     if (!exercise) return;
 
+    if (id === "suspeito" && !targetSuspect) {
+      setTargetSuspect(getRandomSuspect());
+    }
+
     const isDifferent = activeExerciseId !== id;
     setActiveExerciseId(id);
 
@@ -178,9 +183,11 @@ export default function App() {
       if (blocklyRebuiltCallbackRef.current) {
         blocklyRebuiltCallbackRef.current(query);
       }
-      showFeedback("success", `Exercício "${exercise.title.split(": ")[1]}" carregado com pistas!`);
+      const titleName = exercise.title.includes(": ") ? exercise.title.split(": ")[1] : exercise.title;
+      showFeedback("success", `Exercício "${titleName}" carregado com pistas!`);
     } else {
-      showFeedback("success", `Exercício alterado para "${exercise.title.split(": ")[1]}". Mantendo sua query atual.`);
+      const titleName = exercise.title.includes(": ") ? exercise.title.split(": ")[1] : exercise.title;
+      showFeedback("success", `Exercício alterado para "${titleName}". Mantendo sua query atual.`);
     }
 
     if (autoOpen) {
@@ -311,7 +318,7 @@ export default function App() {
               <h1 className="text-xl font-display font-bold tracking-tight text-white flex items-center gap-2">
                 SQL-Parser
                 <span className="text-[10px] uppercase font-mono tracking-widest px-1.5 py-0.5 rounded bg-cyan-950/60 text-cyan-400 font-bold border border-cyan-800">
-                  v1.2026.06.01
+                  v1.2026.06.05
                 </span>
               </h1>
               <p className="text-xs text-slate-400">
@@ -360,15 +367,15 @@ export default function App() {
               Filtro Tech
             </button>
             <button
-              id="example-btn-pessoas"
-              onClick={() => loadExercise("pessoas")}
+              id="example-btn-suspeito"
+              onClick={() => loadExercise("suspeito")}
               className={`px-2.5 py-1 text-xs font-semibold rounded-lg border transition-all cursor-pointer select-none ${
-                activeExerciseId === "pessoas"
+                activeExerciseId === "suspeito"
                   ? "bg-amber-950/40 border-amber-500/60 text-amber-300 shadow"
                   : "bg-slate-900 border-slate-800 text-slate-300 hover:text-amber-400 hover:border-slate-700"
               }`}
             >
-              HAVING
+              Suspeito 🔍
             </button>
           </div>
         </div>
@@ -677,6 +684,12 @@ export default function App() {
           if (blocklyRebuiltCallbackRef.current) {
             blocklyRebuiltCallbackRef.current(q);
           }
+        }}
+        targetSuspect={targetSuspect}
+        onDrawNewSuspect={() => {
+          const nextS = getRandomSuspect();
+          setTargetSuspect(nextS);
+          showFeedback("success", "Novo caso sorteado! Um novo suspeito foi gerado.");
         }}
       />
     </div>
