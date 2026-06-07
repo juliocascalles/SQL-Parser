@@ -46,18 +46,18 @@ export const customers = [
 ];
 
 export const sales = [
-  { id: 1, product: "Teclado", quantity: 150, price: 120, customer_id: 11 },
-  { id: 2, product: "Mouse", quantity: 80, price: 60, customer_id: 11 },
-  { id: 3, product: "Monitor", quantity: 120, price: 1200, customer_id: 11 },
-  { id: 4, product: "Teclado", quantity: 90, price: 110, customer_id: 20 },
-  { id: 5, product: "Mouse", quantity: 200, price: 50, customer_id: 20 },
-  { id: 6, product: "Headset", quantity: 300, price: 250, customer_id: 11 },
-  { id: 7, product: "Monitor", quantity: 45, price: 1300, customer_id: 20 },
-  { id: 8, product: "Headset", quantity: 50, price: 280, customer_id: 20 },
-  { id: 9, product: "Teclado", quantity: 110, price: 120, customer_id: 11 },
-  { id: 10, product: "Gabinete", quantity: 15, price: 400, customer_id: 11 },
-  { id: 11, product: "Mouse", quantity: 130, price: 65, customer_id: 11 },
-  { id: 12, product: "Gabinete", quantity: 110, price: 380, customer_id: 20 }
+  { id: 1, product_id: 3, quantity: 150, price: 120, customer_id: 11 },
+  { id: 2, product_id: 4, quantity: 80, price: 60, customer_id: 11 },
+  { id: 3, product_id: 7, quantity: 120, price: 1200, customer_id: 11 },
+  { id: 4, product_id: 3, quantity: 90, price: 110, customer_id: 2 },
+  { id: 5, product_id: 4, quantity: 200, price: 50, customer_id: 2 },
+  { id: 6, product_id: 8, quantity: 300, price: 250, customer_id: 11 },
+  { id: 7, product_id: 5, quantity: 45, price: 1300, customer_id: 2 },
+  { id: 8, product_id: 8, quantity: 50, price: 280, customer_id: 2 },
+  { id: 9, product_id: 3, quantity: 110, price: 120, customer_id: 11 },
+  { id: 10, product_id: 10, quantity: 15, price: 400, customer_id: 11 },
+  { id: 11, product_id: 4, quantity: 130, price: 65, customer_id: 11 },
+  { id: 12, product_id: 9, quantity: 110, price: 380, customer_id: 2 }
 ];
 
 export const products = [
@@ -71,40 +71,6 @@ export const products = [
   { id: 8, item: "Sony WH-1005 Headset", price: 1350, category: "technology", stock: 35 },
   { id: 9, item: "HyperX SoloCast Mic", price: 450, category: "technology", stock: 40 },
   { id: 10, item: "Cafeteira Nespresso", price: 600, category: "appliances", stock: 30 }
-];
-
-export const Pessoas = [
-  { id: 1, nome: "Ana Paula", sexo: "Feminino", idade: 25, cidade: "São Paulo" },
-  { id: 2, nome: "Bruno Silva", sexo: "Masculino", idade: 31, cidade: "Rio de Janeiro" },
-  { id: 3, nome: "Carla Souza", sexo: "Feminino", idade: 19, cidade: "Belo Horizonte" },
-  { id: 4, nome: "Daniel Costa", sexo: "Masculino", idade: 42, cidade: "Curitiba" },
-  { id: 5, nome: "Eliane Rocha", sexo: "Feminino", idade: 28, cidade: "Porto Alegre" },
-  { id: 6, nome: "Fabio Santos", sexo: "Masculino", idade: 35, cidade: "Salvador" },
-  { id: 7, nome: "Gabriela Lima", sexo: "Feminino", idade: 22, cidade: "Recife" },
-  { id: 8, nome: "Hugo Pereira", sexo: "Masculino", idade: 29, cidade: "Brasília" },
-  { id: 9, nome: "Isabela Alves", sexo: "Feminino", idade: 27, cidade: "São Paulo" },
-  { id: 10, nome: "João Medeiros", sexo: "Masculino", idade: 48, cidade: "Rio de Janeiro" },
-  { id: 11, nome: "Karina Dias", sexo: "Feminino", idade: 33, cidade: "Belo Horizonte" },
-  { id: 12, nome: "Leonardo Gomes", sexo: "Masculino", idade: 24, cidade: "Curitiba" },
-  { id: 13, nome: "Mariana Naves", sexo: "Feminino", idade: 26, cidade: "Porto Alegre" },
-  { id: 14, nome: "Natan Ribeiro", sexo: "Masculino", idade: 38, cidade: "Salvador" },
-  { id: 15, nome: "Olivia Castro", sexo: "Feminino", idade: 30, cidade: "Recife" },
-  { id: 16, nome: "Pedro Barros", sexo: "Masculino", idade: 21, cidade: "Brasília" },
-  { id: 17, nome: "Raquel Martins", sexo: "Feminino", idade: 41, cidade: "São Paulo" },
-  { id: 18, nome: "Samuel Viana", sexo: "Masculino", idade: 18, cidade: "Rio de Janeiro" },
-  { id: 19, nome: "Tatiana Ferraz", sexo: "Feminino", idade: 32, cidade: "Belo Horizonte" },
-  { id: 20, nome: "Vitor Barbosa", sexo: "Masculino", idade: 36, cidade: "Curitiba" },
-  { id: 21, nome: "Beatriz Mota", sexo: "Feminino", idade: 23, cidade: "Salvador" },
-  { id: 22, nome: "Camila Ortiz", sexo: "Feminino", idade: 29, cidade: "Porto Alegre" },
-  { id: 23, nome: "Diana Leitão", sexo: "Feminino", idade: 34, cidade: "São Paulo" },
-  { id: 24, nome: "Fernanda Lins", sexo: "Feminino", idade: 45, cidade: "Rio de Janeiro" },
-  { id: 25, nome: "Helena Moreira", sexo: "Feminino", idade: 50, cidade: "Belo Horizonte" },
-  { id: 26, nome: "Julia Guedes", sexo: "Feminino", idade: 20, cidade: "Curitiba" },
-  { id: 27, nome: "Luana Flores", sexo: "Feminino", idade: 27, cidade: "Porto Alegre" },
-  { id: 28, nome: "William Santos", sexo: "Masculino", idade: 33, cidade: "Porto Alegre" },
-  { id: 29, nome: "Thiago Ramos", sexo: "Masculino", idade: 31, cidade: "São Paulo" },
-  { id: 30, nome: "Felipe Melo", sexo: "Masculino", idade: 28, cidade: "Rio de Janeiro" },
-  { id: 31, nome: "Guilherme Reis", sexo: "Masculino", idade: 22, city: "Salvador" }
 ];
 
 export interface Suspect {
@@ -164,18 +130,18 @@ export const EXERCISES: Exercise[] = [
   {
     id: "sales",
     title: "Exercício 2: Agrupamento de Vendas",
-    description: "Siga o fluxo de análise e agrupe a tabela 'sales' por produto (product). Filtre apenas vendas do cliente com id igual a 11 (customer_id = 11). Retorne o produto (product) e a soma das quantidades identificada como 'total'. Ordene os resultados pelo total em ordem decrescente (DESC).",
-    query: "SELECT product, Sum(quantity) As total FROM sales WHERE customer_id = 11 GROUP BY product ORDER BY total DESC",
-    templateQuery: "SELECT * FROM sales WHERE customer_id = 15 GROUP BY product ORDER BY quantity DESC",
+    description: "Siga o fluxo de análise e agrupe a tabela 'sales' por id do produto (product_id). Filtre apenas vendas do cliente com id igual a 11 (customer_id = 11). Retorne o id do produto (product_id) e a soma das quantidades identificada como 'total'. Ordene os resultados pelo total em ordem decrescente (DESC).",
+    query: "SELECT product_id, Sum(quantity) As total FROM sales WHERE customer_id = 11 GROUP BY product_id ORDER BY total DESC",
+    templateQuery: "SELECT * FROM sales WHERE customer_id = 15 GROUP BY product_id ORDER BY quantity DESC",
     targetTable: "sales"
   },
   {
     id: "complex",
-    title: "Exercício 3: Notebooks e Tecnologia",
-    description: "Filtre a tabela 'products' selecionando os campos item e preço (price) apenas para produtos da categoria 'technology' com valor abaixo de 1500 (price < 1500). Ordene por preço de forma decrescente (DESC).",
-    query: "SELECT item, price FROM products WHERE category = 'technology' AND price < 1500 ORDER BY price DESC",
-    templateQuery: "SELECT item, price, category FROM products WHERE category = 'appliances' ORDER BY price ASC",
-    targetTable: "products"
+    title: "Exercício 3: Filtragem por Categoria (Technology)",
+    description: "Realize um JOIN entre as tabelas 'sales' e 'products' para obter as vendas de todos os produtos que pertencem à categoria 'technology'. Retorne o ID da venda (id), o nome do item (item), a quantidade vendida (quantity) e o preço (price). Ordene os resultados de forma crescente pelo ID da venda.",
+    query: "SELECT sales.id, products.item, sales.quantity, sales.price FROM sales JOIN products ON sales.product_id = products.id WHERE products.category = 'technology' ORDER BY sales.id ASC",
+    templateQuery: "SELECT sales.id, products.item FROM sales JOIN products ON sales.product_id = products.id WHERE products.category = 'appliances' ORDER BY sales.id ASC",
+    targetTable: "sales"
   },
   {
     id: "suspeito",
@@ -192,6 +158,104 @@ export function getRandomSuspect(): Suspect {
   return suspeitos[index];
 }
 
+// SQL helper functions mimicking database alias/extract semantics
+function extractTableName(tableStr: string): string {
+  let clean = tableStr.trim();
+  const asRegex = /\s+AS\s+/i;
+  if (asRegex.test(clean)) {
+    const parts = clean.split(asRegex);
+    return parts[0].trim().replace(/[\[\]`"]/g, "");
+  }
+  const parts = clean.split(/\s+/);
+  if (parts.length > 1) {
+    return parts[0].trim().replace(/[\[\]`"]/g, "");
+  }
+  return clean.replace(/[\[\]`"]/g, "");
+}
+
+function getTableAlias(tableStr: string): string {
+  const clean = tableStr.trim();
+  const asRegex = /\s+AS\s+/i;
+  if (asRegex.test(clean)) {
+    const parts = clean.split(asRegex);
+    return parts[1] ? parts[1].trim() : "";
+  }
+  const parts = clean.split(/\s+/);
+  if (parts.length > 1) {
+    return parts[1].trim();
+  }
+  return "";
+}
+
+function getTableData(tableName: string): any[] | null {
+  const name = tableName.toLowerCase().trim();
+  if (name === "customers" || name === "clientes") return customers;
+  if (name === "sales" || name === "vendas") return sales;
+  if (name === "products" || name === "produtos" || name === "product") return products;
+  if (name === "suspeitos") return suspeitos;
+  return null;
+}
+
+function evaluateCondition(conditionStr: string, context: Record<string, any>): boolean {
+  try {
+    const keys = Object.keys(context);
+    const values = Object.values(context);
+    
+    let jsCond = conditionStr
+      .replace(/\bAND\b/gi, " && ")
+      .replace(/\bOR\b/gi, " || ")
+      .replace(/(?<![<>!=])=(?![=])/g, " === ")
+      .replace(/<>/g, " !== ");
+
+    const f = new Function(...keys, `return (${jsCond});`);
+    return !!f(...values);
+  } catch (e) {
+    console.warn("Error evaluating condition:", conditionStr, e);
+    return false;
+  }
+}
+
+function getValueFromRow(expr: string, row: any): any {
+  const cleanExpr = expr.trim();
+  
+  if (cleanExpr.toLowerCase() === "count(*)") {
+    return row["count_all"] !== undefined ? row["count_all"] : (row["COUNT(*)"] !== undefined ? row["COUNT(*)"] : null);
+  }
+  
+  if (row[cleanExpr] !== undefined) {
+    return row[cleanExpr];
+  }
+  const flatMatchedKey = Object.keys(row).find(k => k.toLowerCase() === cleanExpr.toLowerCase());
+  if (flatMatchedKey !== undefined && flatMatchedKey !== "_tables") {
+    return row[flatMatchedKey];
+  }
+
+  if (cleanExpr.includes(".")) {
+    const parts = cleanExpr.split(".");
+    const tblOrAlias = parts[0].toLowerCase().trim();
+    const colName = parts[1].toLowerCase().trim();
+    if (row._tables && row._tables[tblOrAlias]) {
+      const tblRow = row._tables[tblOrAlias];
+      const matchedKey = Object.keys(tblRow).find(k => k.toLowerCase() === colName);
+      if (matchedKey !== undefined) {
+        return tblRow[matchedKey];
+      }
+    }
+  }
+
+  if (row._tables) {
+    for (const tbl of Object.keys(row._tables)) {
+      const tblRow = row._tables[tbl];
+      const matchedKey = Object.keys(tblRow).find(k => k.toLowerCase() === cleanExpr.toLowerCase());
+      if (matchedKey !== undefined) {
+        return tblRow[matchedKey];
+      }
+    }
+  }
+
+  return undefined;
+}
+
 export function executeSqlQuery(sql: string): { success: boolean; data?: any[]; error?: string } {
   try {
     if (!sql || !sql.trim()) {
@@ -199,43 +263,94 @@ export function executeSqlQuery(sql: string): { success: boolean; data?: any[]; 
     }
 
     const parsed = parseSqlStringToData(sql);
-    const tableNameLower = parsed.mainTable.toLowerCase().trim();
+    const mainTableName = extractTableName(parsed.mainTable);
+    const mainTableAlias = getTableAlias(parsed.mainTable) || mainTableName;
 
-    let sourceData: any[] = [];
-    if (tableNameLower === "customers" || tableNameLower === "clientes") {
-      sourceData = customers;
-    } else if (tableNameLower === "sales" || tableNameLower === "vendas") {
-      sourceData = sales;
-    } else if (tableNameLower === "products" || tableNameLower === "produtos" || tableNameLower === "product") {
-      sourceData = products;
-    } else if (tableNameLower === "pessoas" || tableNameLower === "pessoas") {
-      sourceData = Pessoas;
-    } else if (tableNameLower === "suspeitos") {
-      sourceData = suspeitos;
-    } else {
-      return { success: false, error: `Tabela '${parsed.mainTable}' não encontrada no banco de dados em memória. As tabelas disponíveis são: customers, sales, products, Pessoas, suspeitos.` };
+    let sourceData = getTableData(mainTableName);
+    if (!sourceData) {
+      return { success: false, error: `Tabela '${mainTableName}' não encontrada no banco de dados em memória. As tabelas disponíveis são: customers, sales, products, suspeitos.` };
+    }
+
+    // Initialize joined rows with mapping metadata
+    let joinedRows = sourceData.map(row => ({
+      _tables: {
+        [mainTableName.toLowerCase()]: row,
+        [mainTableAlias.toLowerCase()]: row
+      },
+      ...row
+    }));
+
+    if (parsed.joins && parsed.joins.length > 0) {
+      for (const join of parsed.joins) {
+        const joinTableName = extractTableName(join.table);
+        const joinTableAlias = getTableAlias(join.table) || joinTableName;
+        const rightData = getTableData(joinTableName);
+        if (!rightData) {
+          return { success: false, error: `Tabela '${joinTableName}' para JOIN não foi encontrada.` };
+        }
+
+        const isLeftJoin = join.joinType.toUpperCase().includes("LEFT");
+        const nextJoinedRows: any[] = [];
+
+        for (const leftCombined of joinedRows) {
+          let matchedAny = false;
+
+          for (const rightRow of rightData) {
+            const context: Record<string, any> = {
+              ...leftCombined._tables,
+              [joinTableName.toLowerCase()]: rightRow,
+              [joinTableAlias.toLowerCase()]: rightRow,
+              ...leftCombined,
+              ...rightRow
+            };
+            delete context["_tables"];
+
+            if (evaluateCondition(join.onCondition, context)) {
+              matchedAny = true;
+              nextJoinedRows.push({
+                ...leftCombined,
+                ...rightRow,
+                _tables: {
+                  ...leftCombined._tables,
+                  [joinTableName.toLowerCase()]: rightRow,
+                  [joinTableAlias.toLowerCase()]: rightRow
+                }
+              });
+            }
+          }
+
+          if (!matchedAny && isLeftJoin) {
+            const nullRightRow: Record<string, any> = {};
+            if (rightData.length > 0) {
+              Object.keys(rightData[0]).forEach(k => {
+                nullRightRow[k] = null;
+              });
+            }
+            nextJoinedRows.push({
+              ...leftCombined,
+              ...nullRightRow,
+              _tables: {
+                ...leftCombined._tables,
+                [joinTableName.toLowerCase()]: nullRightRow,
+                [joinTableAlias.toLowerCase()]: nullRightRow
+              }
+            });
+          }
+        }
+        joinedRows = nextJoinedRows;
+      }
     }
 
     // 1. Filter using WHERE
-    let filtered = [...sourceData];
+    let filtered = [...joinedRows];
     if (parsed.whereCondition && parsed.whereCondition.trim()) {
       filtered = filtered.filter(row => {
-        try {
-          const keys = Object.keys(row);
-          const values = Object.values(row);
-          let jsCond = parsed.whereCondition
-            .replace(/\bAND\b/gi, " && ")
-            .replace(/\bOR\b/gi, " || ")
-            .replace(/(?<![<>!=])=(?![=])/g, " === ")
-            .replace(/<>/g, " !== ");
-
-          // Safeguard quotes
-          const f = new Function(...keys, `return (${jsCond});`);
-          return !!f(...values);
-        } catch (e: any) {
-          console.warn("Error evaluating WHERE:", parsed.whereCondition, e);
-          return true; // Fallback
-        }
+        const context = {
+          ...row._tables,
+          ...row
+        };
+        delete context["_tables"];
+        return evaluateCondition(parsed.whereCondition, context);
       });
     }
 
@@ -250,7 +365,7 @@ export function executeSqlQuery(sql: string): { success: boolean; data?: any[]; 
       const gbKeys = parsed.groupByFields.map(f => f.trim());
 
       filtered.forEach(row => {
-        const valuesKey = gbKeys.map(k => String((row as any)[k] !== undefined ? (row as any)[k] : "")).join("||");
+        const valuesKey = gbKeys.map(k => String(getValueFromRow(k, row) !== undefined ? getValueFromRow(k, row) : "")).join("||");
         if (!groups[valuesKey]) {
           groups[valuesKey] = [];
         }
@@ -263,20 +378,36 @@ export function executeSqlQuery(sql: string): { success: boolean; data?: any[]; 
         const rowResult: Record<string, any> = {};
 
         gbKeys.forEach(k => {
-          rowResult[k] = (repRow as any)[k];
+          rowResult[k] = getValueFromRow(k, repRow);
         });
 
         const count_all = groupRows.length;
         rowResult["COUNT(*)"] = count_all;
         rowResult["count_all"] = count_all;
 
-        const numericCols = ["quantity", "price", "idade", "stock"];
+        const numericCols: string[] = [];
+        Object.keys(repRow).forEach(k => {
+          if (k !== "_tables" && typeof repRow[k] === "number") {
+            numericCols.push(k);
+          }
+        });
+        if (repRow._tables) {
+          Object.keys(repRow._tables).forEach(tbl => {
+            const tblRow = repRow._tables[tbl];
+            Object.keys(tblRow).forEach(k => {
+              if (typeof tblRow[k] === "number" && !numericCols.includes(`${tbl}.${k}`)) {
+                numericCols.push(`${tbl}.${k}`);
+              }
+            });
+          });
+        }
+
         numericCols.forEach(col => {
           let sum = 0;
           let max = -Infinity;
           let min = Infinity;
           groupRows.forEach(r => {
-            const v = Number((r as any)[col]);
+            const v = Number(getValueFromRow(col, r));
             if (!isNaN(v)) {
               sum += v;
               if (v > max) max = v;
@@ -289,18 +420,15 @@ export function executeSqlQuery(sql: string): { success: boolean; data?: any[]; 
           rowResult[`AVG(${col})`] = avg;
           rowResult[`MAX(${col})`] = max === -Infinity ? 0 : max;
           rowResult[`MIN(${col})`] = min === Infinity ? 0 : min;
-          rowResult[`COUNT(${col})`] = groupRows.filter(r => (r as any)[col] !== undefined && (r as any)[col] !== null).length;
+          rowResult[`COUNT(${col})`] = groupRows.filter(r => getValueFromRow(col, r) !== undefined && getValueFromRow(col, r) !== null).length;
 
-          rowResult[`sum_${col}`] = sum;
-          rowResult[`avg_${col}`] = avg;
-          rowResult[`max_${col}`] = max;
-          rowResult[`min_${col}`] = min;
+          rowResult[`sum_${col.toLowerCase()}`] = sum;
+          rowResult[`avg_${col.toLowerCase()}`] = avg;
+          rowResult[`max_${col.toLowerCase()}`] = max;
+          rowResult[`min_${col.toLowerCase()}`] = min;
         });
 
-        if (tableNameLower === "sales" || tableNameLower === "vendas") {
-          rowResult["quantity"] = rowResult["SUM(quantity)"] || 150; // Use sum quantity for grouped sales
-        }
-
+        rowResult["_tables"] = repRow._tables;
         grouped.push(rowResult);
       });
     } else if (hasAggsInSelect) {
@@ -309,13 +437,32 @@ export function executeSqlQuery(sql: string): { success: boolean; data?: any[]; 
       rowResult["COUNT(*)"] = count_all;
       rowResult["count_all"] = count_all;
 
-      const numericCols = ["quantity", "price", "idade", "stock"];
+      const numericCols: string[] = [];
+      if (filtered.length > 0) {
+        const repRow = filtered[0];
+        Object.keys(repRow).forEach(k => {
+          if (k !== "_tables" && typeof repRow[k] === "number") {
+            numericCols.push(k);
+          }
+        });
+        if (repRow._tables) {
+          Object.keys(repRow._tables).forEach(tbl => {
+            const tblRow = repRow._tables[tbl];
+            Object.keys(tblRow).forEach(k => {
+              if (typeof tblRow[k] === "number" && !numericCols.includes(`${tbl}.${k}`)) {
+                numericCols.push(`${tbl}.${k}`);
+              }
+            });
+          });
+        }
+      }
+
       numericCols.forEach(col => {
         let sum = 0;
         let max = -Infinity;
         let min = Infinity;
         filtered.forEach(r => {
-          const v = Number((r as any)[col]);
+          const v = Number(getValueFromRow(col, r));
           if (!isNaN(v)) {
             sum += v;
             if (v > max) max = v;
@@ -328,14 +475,17 @@ export function executeSqlQuery(sql: string): { success: boolean; data?: any[]; 
         rowResult[`AVG(${col})`] = avg;
         rowResult[`MAX(${col})`] = max === -Infinity ? 0 : max;
         rowResult[`MIN(${col})`] = min === Infinity ? 0 : min;
-        rowResult[`COUNT(${col})`] = filtered.filter(r => (r as any)[col] !== undefined && (r as any)[col] !== null).length;
+        rowResult[`COUNT(${col})`] = filtered.filter(r => getValueFromRow(col, r) !== undefined && getValueFromRow(col, r) !== null).length;
 
-        rowResult[`sum_${col}`] = sum;
-        rowResult[`avg_${col}`] = avg;
-        rowResult[`max_${col}`] = max;
-        rowResult[`min_${col}`] = min;
+        rowResult[`sum_${col.toLowerCase()}`] = sum;
+        rowResult[`avg_${col.toLowerCase()}`] = avg;
+        rowResult[`max_${col.toLowerCase()}`] = max;
+        rowResult[`min_${col.toLowerCase()}`] = min;
       });
 
+      if (filtered.length > 0) {
+        rowResult["_tables"] = filtered[0]._tables;
+      }
       grouped = [rowResult];
     } else {
       grouped = filtered.map(row => ({ ...row }));
@@ -393,20 +543,24 @@ export function executeSqlQuery(sql: string): { success: boolean; data?: any[]; 
     if (parsedFields.length > 0) {
       projected = grouped.map(row => {
         const projRow: Record<string, any> = {};
-        const rowKeys = Object.keys(row);
         parsedFields.forEach(pf => {
-          let val = undefined;
-          const targetKey = rowKeys.find(k => k.toLowerCase() === pf.expr.toLowerCase());
-          if (targetKey !== undefined) {
-            val = row[targetKey];
-          } else {
-            if (pf.expr.toLowerCase() === "count(*)") {
-              val = row["count_all"];
-            } else {
-              val = row[pf.expr];
+          let val = getValueFromRow(pf.expr, row);
+          
+          if (val === undefined) {
+            const expKey = Object.keys(row).find(k => k.toLowerCase() === pf.expr.toLowerCase());
+            if (expKey) {
+              val = row[expKey];
             }
           }
-          projRow[pf.alias] = val !== undefined ? val : null;
+          
+          const aliasName = pf.alias;
+          projRow[aliasName] = val !== undefined ? val : null;
+          if (aliasName.includes(".")) {
+            const shortCol = aliasName.split(".").pop()!;
+            if (projRow[shortCol] === undefined) {
+              projRow[shortCol] = val !== undefined ? val : null;
+            }
+          }
         });
         return projRow;
       });
@@ -414,6 +568,7 @@ export function executeSqlQuery(sql: string): { success: boolean; data?: any[]; 
       projected = grouped.map(row => {
         const cleanRow = { ...row };
         delete cleanRow["count_all"];
+        delete cleanRow["_tables"];
         Object.keys(cleanRow).forEach(k => {
           if (k.startsWith("SUM(") || k.startsWith("sum_") || k.startsWith("AVG(") || k.startsWith("avg_") || k.includes("(")) {
             delete cleanRow[k];
@@ -430,8 +585,10 @@ export function executeSqlQuery(sql: string): { success: boolean; data?: any[]; 
           const col = order.column;
           const dir = order.direction;
 
-          let valA = a[col];
-          let valB = b[col];
+          let valA = getValueFromRow(col, a);
+          if (valA === undefined) valA = a[col];
+          let valB = getValueFromRow(col, b);
+          if (valB === undefined) valB = b[col];
 
           if (valA === undefined) {
              const matchedKey = Object.keys(a).find(k => k.toLowerCase() === col.toLowerCase());
