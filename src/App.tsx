@@ -318,7 +318,7 @@ export default function App() {
               <h1 className="text-xl font-display font-bold tracking-tight text-white flex items-center gap-2">
                 SQL-Parser
                 <span className="text-[10px] uppercase font-mono tracking-widest px-1.5 py-0.5 rounded bg-cyan-950/60 text-cyan-400 font-bold border border-cyan-800">
-                  v1.2026.06.05
+                  v1.2026.06.06
                 </span>
               </h1>
               <p className="text-xs text-slate-400">

@@ -113,7 +113,7 @@ export interface Suspect {
   sexo: "masculino" | "feminino";
   cor_cabelo: "preto" | "castanho" | "loiro" | "ruivo";
   tamanho_cabelo: "longo" | "curto";
-  olhar: "desconfiado" | "piscando" | "arregalado" | "sorridente";
+  expressao: "desconfiado" | "piscando" | "arregalado" | "sorridente";
   bigode: "sim" | "não";
   barba: "sim" | "não";
   pele: "branca" | "negra" | "parda" | "amarela";
@@ -121,26 +121,26 @@ export interface Suspect {
 }
 
 export const suspeitos: Suspect[] = [
-  { id: 1, nome: "Carlos Oliver", sexo: "masculino", cor_cabelo: "preto", tamanho_cabelo: "curto", olhar: "arregalado", bigode: "sim", barba: "não", pele: "parda", imagem: carlos_oliver },
-  { id: 2, nome: "Ana Clara", sexo: "feminino", cor_cabelo: "ruivo", tamanho_cabelo: "longo", olhar: "desconfiado", bigode: "não", barba: "não", pele: "branca", imagem: ana_clara },
-  { id: 3, nome: "Jean Pierre", sexo: "masculino", cor_cabelo: "loiro", tamanho_cabelo: "curto", olhar: "piscando", bigode: "não", barba: "sim", pele: "branca", imagem: jean_pierre },
-  { id: 4, nome: "Roberta Santos", sexo: "feminino", cor_cabelo: "preto", tamanho_cabelo: "curto", olhar: "sorridente", bigode: "não", barba: "não", pele: "negra", imagem: roberta_santos },
-  { id: 5, nome: "Kenji Tanaka", sexo: "masculino", cor_cabelo: "preto", tamanho_cabelo: "curto", olhar: "sorridente", bigode: "não", barba: "não", pele: "amarela", imagem: kenji_tanaka },
-  { id: 6, nome: "Leticia Silva", sexo: "feminino", cor_cabelo: "loiro", tamanho_cabelo: "longo", olhar: "arregalado", bigode: "não", barba: "não", pele: "parda", imagem: leticia_silva },
-  { id: 7, nome: "Marcos Paz", sexo: "masculino", cor_cabelo: "castanho", tamanho_cabelo: "curto", olhar: "desconfiado", bigode: "sim", barba: "sim", pele: "branca", imagem: marcos_paz },
-  { id: 8, nome: "Elena Rostova", sexo: "feminino", cor_cabelo: "loiro", tamanho_cabelo: "longo", olhar: "piscando", bigode: "não", barba: "não", pele: "branca", imagem: elena_rostova },
-  { id: 9, nome: "Djavan Costa", sexo: "masculino", cor_cabelo: "preto", tamanho_cabelo: "curto", olhar: "sorridente", bigode: "sim", barba: "não", pele: "negra", imagem: djavan_costa },
-  { id: 10, nome: "Mei Lin", sexo: "feminino", cor_cabelo: "preto", tamanho_cabelo: "longo", olhar: "arregalado", bigode: "não", barba: "não", pele: "amarela", imagem: mei_lin },
-  { id: 11, nome: "Igor Cruz", sexo: "masculino", cor_cabelo: "ruivo", tamanho_cabelo: "curto", olhar: "arregalado", bigode: "não", barba: "sim", pele: "parda", imagem: igor_cruz },
-  { id: 12, nome: "Patricia Lima", sexo: "feminino", cor_cabelo: "castanho", tamanho_cabelo: "longo", olhar: "desconfiado", bigode: "não", barba: "não", pele: "branca", imagem: patricia_lima },
-  { id: 13, nome: "Rodrigo Faro", sexo: "masculino", cor_cabelo: "castanho", tamanho_cabelo: "curto", olhar: "piscando", bigode: "não", barba: "não", pele: "branca", imagem: rodrigo_faro },
-  { id: 14, nome: "Sabrina Sato", sexo: "feminino", cor_cabelo: "preto", tamanho_cabelo: "longo", olhar: "sorridente", bigode: "não", barba: "não", pele: "amarela", imagem: sabrina_sato },
-  { id: 15, nome: "Valeria Garcia", sexo: "feminino", cor_cabelo: "ruivo", tamanho_cabelo: "curto", olhar: "arregalado", bigode: "não", barba: "não", pele: "parda", imagem: valeria_garcia },
-  { id: 16, nome: "Gustavo Lins", sexo: "masculino", cor_cabelo: "loiro", tamanho_cabelo: "longo", olhar: "desconfiado", bigode: "não", barba: "não", pele: "branca", imagem: gustavo_lins },
-  { id: 17, nome: "Juliana Mendes", sexo: "feminino", cor_cabelo: "castanho", tamanho_cabelo: "curto", olhar: "piscando", bigode: "não", barba: "não", pele: "negra", imagem: juliana_mendes },
-  { id: 18, nome: "Pedro Rocha", sexo: "masculino", cor_cabelo: "castanho", tamanho_cabelo: "longo", olhar: "sorridente", bigode: "não", barba: "sim", pele: "parda", imagem: pedro_rocha },
-  { id: 19, nome: "Aline Nobre", sexo: "feminino", cor_cabelo: "preto", tamanho_cabelo: "longo", olhar: "piscando", bigode: "não", barba: "não", pele: "negra", imagem: aline_nobre },
-  { id: 20, nome: "Thiago Ramos", sexo: "masculino", cor_cabelo: "ruivo", tamanho_cabelo: "curto", olhar: "sorridente", bigode: "sim", barba: "sim", pele: "amarela", imagem: thiago_ramos }
+  { id: 1, nome: "Carlos Oliver", sexo: "masculino", cor_cabelo: "preto", tamanho_cabelo: "curto", expressao: "arregalado", bigode: "sim", barba: "não", pele: "parda", imagem: carlos_oliver },
+  { id: 2, nome: "Ana Clara", sexo: "feminino", cor_cabelo: "ruivo", tamanho_cabelo: "longo", expressao: "desconfiado", bigode: "não", barba: "não", pele: "branca", imagem: ana_clara },
+  { id: 3, nome: "Jean Pierre", sexo: "masculino", cor_cabelo: "loiro", tamanho_cabelo: "curto", expressao: "piscando", bigode: "não", barba: "sim", pele: "branca", imagem: jean_pierre },
+  { id: 4, nome: "Roberta Santos", sexo: "feminino", cor_cabelo: "preto", tamanho_cabelo: "curto", expressao: "sorridente", bigode: "não", barba: "não", pele: "negra", imagem: roberta_santos },
+  { id: 5, nome: "Kenji Tanaka", sexo: "masculino", cor_cabelo: "preto", tamanho_cabelo: "curto", expressao: "sorridente", bigode: "não", barba: "não", pele: "amarela", imagem: kenji_tanaka },
+  { id: 6, nome: "Leticia Silva", sexo: "feminino", cor_cabelo: "loiro", tamanho_cabelo: "longo", expressao: "arregalado", bigode: "não", barba: "não", pele: "parda", imagem: leticia_silva },
+  { id: 7, nome: "Marcos Paz", sexo: "masculino", cor_cabelo: "castanho", tamanho_cabelo: "curto", expressao: "desconfiado", bigode: "sim", barba: "sim", pele: "branca", imagem: marcos_paz },
+  { id: 8, nome: "Elena Rostova", sexo: "feminino", cor_cabelo: "loiro", tamanho_cabelo: "longo", expressao: "piscando", bigode: "não", barba: "não", pele: "branca", imagem: elena_rostova },
+  { id: 9, nome: "Djavan Costa", sexo: "masculino", cor_cabelo: "preto", tamanho_cabelo: "curto", expressao: "sorridente", bigode: "sim", barba: "não", pele: "negra", imagem: djavan_costa },
+  { id: 10, nome: "Mei Lin", sexo: "feminino", cor_cabelo: "preto", tamanho_cabelo: "longo", expressao: "arregalado", bigode: "não", barba: "não", pele: "amarela", imagem: mei_lin },
+  { id: 11, nome: "Igor Cruz", sexo: "masculino", cor_cabelo: "ruivo", tamanho_cabelo: "curto", expressao: "arregalado", bigode: "não", barba: "sim", pele: "parda", imagem: igor_cruz },
+  { id: 12, nome: "Patricia Lima", sexo: "feminino", cor_cabelo: "castanho", tamanho_cabelo: "longo", expressao: "desconfiado", bigode: "não", barba: "não", pele: "branca", imagem: patricia_lima },
+  { id: 13, nome: "Rodrigo Faro", sexo: "masculino", cor_cabelo: "castanho", tamanho_cabelo: "curto", expressao: "piscando", bigode: "não", barba: "não", pele: "branca", imagem: rodrigo_faro },
+  { id: 14, nome: "Sabrina Sato", sexo: "feminino", cor_cabelo: "preto", tamanho_cabelo: "longo", expressao: "sorridente", bigode: "não", barba: "não", pele: "amarela", imagem: sabrina_sato },
+  { id: 15, nome: "Valeria Garcia", sexo: "feminino", cor_cabelo: "ruivo", tamanho_cabelo: "curto", expressao: "arregalado", bigode: "não", barba: "não", pele: "parda", imagem: valeria_garcia },
+  { id: 16, nome: "Gustavo Lins", sexo: "masculino", cor_cabelo: "loiro", tamanho_cabelo: "longo", expressao: "desconfiado", bigode: "não", barba: "não", pele: "branca", imagem: gustavo_lins },
+  { id: 17, nome: "Juliana Mendes", sexo: "feminino", cor_cabelo: "castanho", tamanho_cabelo: "curto", expressao: "piscando", bigode: "não", barba: "não", pele: "negra", imagem: juliana_mendes },
+  { id: 18, nome: "Pedro Rocha", sexo: "masculino", cor_cabelo: "castanho", tamanho_cabelo: "longo", expressao: "sorridente", bigode: "não", barba: "sim", pele: "parda", imagem: pedro_rocha },
+  { id: 19, nome: "Aline Nobre", sexo: "feminino", cor_cabelo: "preto", tamanho_cabelo: "longo", expressao: "piscando", bigode: "não", barba: "não", pele: "negra", imagem: aline_nobre },
+  { id: 20, nome: "Thiago Ramos", sexo: "masculino", cor_cabelo: "ruivo", tamanho_cabelo: "curto", expressao: "sorridente", bigode: "sim", barba: "sim", pele: "amarela", imagem: thiago_ramos }
 ];
 
 export interface Exercise {

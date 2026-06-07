@@ -372,15 +372,30 @@ export default function ExerciseModal({
                   )}
                 </div>
               ) : (
-                <>
-                  <XCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
-                  <div>
-                    <div className="font-extrabold text-rose-400 text-xs uppercase tracking-wider">
-                      Status: Resposta Incorreta
+                <div className="w-full flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="flex items-start gap-4">
+                    <XCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+                    <div>
+                      <div className="font-extrabold text-rose-400 text-xs uppercase tracking-wider">
+                        Status: Resposta Incorreta
+                      </div>
+                      <p className="mt-1 leading-relaxed text-slate-200 font-medium">{validation.message}</p>
                     </div>
-                    <p className="mt-1 leading-relaxed text-slate-200 font-medium">{validation.message}</p>
                   </div>
-                </>
+                  <button
+                    onClick={() => {
+                      let correctQuery = selectedExercise.query;
+                      if (activeExerciseId === "suspeito" && targetSuspect) {
+                        correctQuery = `SELECT * FROM suspeitos WHERE sexo = '${targetSuspect.sexo}' AND pele = '${targetSuspect.pele}' AND expressao = '${targetSuspect.expressao}' AND tamanho_cabelo = '${targetSuspect.tamanho_cabelo}' AND cor_cabelo = '${targetSuspect.cor_cabelo}' AND bigode = '${targetSuspect.bigode}' AND barba = '${targetSuspect.barba}'`;
+                      }
+                      onLoadExerciseSql(correctQuery);
+                      onClose();
+                    }}
+                    className="px-4 py-2 bg-rose-500/15 hover:bg-rose-500/25 text-rose-350 hover:text-rose-250 border border-rose-500/30 text-xs font-bold rounded-xl transition-all shadow-md shrink-0 cursor-pointer self-end md:self-center"
+                  >
+                    Desistir e ver a resposta
+                  </button>
+                </div>
               )}
             </div>
           ) : (
