@@ -46,18 +46,18 @@ export const customers = [
 ];
 
 export const sales = [
-  { id: 1, product_id: 3, quantity: 150, price: 120, customer_id: 11 },
-  { id: 2, product_id: 4, quantity: 80, price: 60, customer_id: 11 },
-  { id: 3, product_id: 7, quantity: 120, price: 1200, customer_id: 11 },
-  { id: 4, product_id: 3, quantity: 90, price: 110, customer_id: 2 },
-  { id: 5, product_id: 4, quantity: 200, price: 50, customer_id: 2 },
-  { id: 6, product_id: 8, quantity: 300, price: 250, customer_id: 11 },
-  { id: 7, product_id: 5, quantity: 45, price: 1300, customer_id: 2 },
-  { id: 8, product_id: 8, quantity: 50, price: 280, customer_id: 2 },
-  { id: 9, product_id: 3, quantity: 110, price: 120, customer_id: 11 },
-  { id: 10, product_id: 10, quantity: 15, price: 400, customer_id: 11 },
-  { id: 11, product_id: 4, quantity: 130, price: 65, customer_id: 11 },
-  { id: 12, product_id: 9, quantity: 110, price: 380, customer_id: 2 }
+  { id: 1, product_id: 3, quantity: 150, customer_id: 11 },
+  { id: 2, product_id: 4, quantity: 80, customer_id: 11 },
+  { id: 3, product_id: 7, quantity: 120, customer_id: 11 },
+  { id: 4, product_id: 3, quantity: 90, customer_id: 2 },
+  { id: 5, product_id: 4, quantity: 200, customer_id: 2 },
+  { id: 6, product_id: 8, quantity: 300, customer_id: 11 },
+  { id: 7, product_id: 5, quantity: 45, customer_id: 2 },
+  { id: 8, product_id: 8, quantity: 50, customer_id: 2 },
+  { id: 9, product_id: 3, quantity: 110, customer_id: 11 },
+  { id: 10, product_id: 10, quantity: 15, customer_id: 11 },
+  { id: 11, product_id: 4, quantity: 130, customer_id: 11 },
+  { id: 12, product_id: 9, quantity: 110, customer_id: 2 }
 ];
 
 export const products = [
@@ -139,8 +139,8 @@ export const EXERCISES: Exercise[] = [
     id: "complex",
     title: "Exercício 3: Filtragem por Categoria (Technology)",
     description: "Realize um JOIN entre as tabelas 'sales' e 'products' para obter as vendas de todos os produtos que pertencem à categoria 'technology'. Retorne o ID da venda (id), o nome do item (item), a quantidade vendida (quantity) e o preço (price). Ordene os resultados de forma crescente pelo ID da venda.",
-    query: "SELECT sales.id, products.item, sales.quantity, sales.price FROM sales JOIN products ON sales.product_id = products.id WHERE products.category = 'technology' ORDER BY sales.id ASC",
-    templateQuery: "SELECT sales.id, products.item FROM sales JOIN products ON sales.product_id = products.id WHERE products.category = 'appliances' ORDER BY sales.id ASC",
+    query: "SELECT sales.id, products.item, sales.quantity, products.price FROM sales JOIN products ON sales.product_id = products.id WHERE products.category = 'technology' ORDER BY sales.id ASC",
+    templateQuery: "SELECT sales.id, products.item FROM sales JOIN customers ON sales.product_id = products.id WHERE products.category = 'appliances' ORDER BY sales.id ASC",
     targetTable: "sales"
   },
   {
