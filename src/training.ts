@@ -553,14 +553,11 @@ export function executeSqlQuery(sql: string): { success: boolean; data?: any[]; 
             }
           }
           
-          const aliasName = pf.alias;
-          projRow[aliasName] = val !== undefined ? val : null;
+          let aliasName = pf.alias;
           if (aliasName.includes(".")) {
-            const shortCol = aliasName.split(".").pop()!;
-            if (projRow[shortCol] === undefined) {
-              projRow[shortCol] = val !== undefined ? val : null;
-            }
+            aliasName = aliasName.split(".").pop()!;
           }
+          projRow[aliasName] = val !== undefined ? val : null;
         });
         return projRow;
       });
@@ -651,28 +648,41 @@ export function verifySolution(exerciseId: string, userResult: any[]): { solved:
     return { solved: false, message: `O resultado esperado possui ${expected.length} linhas, mas a sua consulta em memória retornou ${userResult.length} linhas.` };
   }
 
+  // Normalize helper to disregard table prefixes and make keys case-insensitive
+  const normalizeRowKeys = (row: any): Record<string, any> => {
+    const normalized: Record<string, any> = {};
+    for (const key of Object.keys(row)) {
+      if (key === "_tables" || key === "count_all") continue;
+      const shortKey = key.includes(".") ? key.split(".").pop()! : key;
+      normalized[shortKey.toLowerCase()] = row[key];
+    }
+    return normalized;
+  };
+
   // Row compare
   for (let i = 0; i < expected.length; i++) {
     const expRow = expected[i];
     const usrRow = userResult[i];
 
-    const expKeys = Object.keys(expRow).sort();
-    const usrKeys = Object.keys(usrRow).sort();
+    const normalizedExp = normalizeRowKeys(expRow);
+    const normalizedUsr = normalizeRowKeys(usrRow);
+
+    const expKeys = Object.keys(normalizedExp).sort();
+    const usrKeys = Object.keys(normalizedUsr).sort();
 
     if (expKeys.length !== usrKeys.length) {
       return { solved: false, message: "As colunas retornadas não possuem a mesma quantidade do gabarito." };
     }
 
     for (let j = 0; j < expKeys.length; j++) {
-      if (expKeys[j].toLowerCase() !== usrKeys[j].toLowerCase()) {
+      if (expKeys[j] !== usrKeys[j]) {
          return { solved: false, message: `O campo retornado '${usrKeys[j]}' não coincide com o esperado '${expKeys[j]}'.` };
       }
     }
 
     for (const key of expKeys) {
-      const usrKey = Object.keys(usrRow).find(k => k.toLowerCase() === key.toLowerCase()) || key;
-      if (String(expRow[key]) !== String(usrRow[usrKey])) {
-        return { solved: false, message: `Diferença de valores encontrada na linha ${i + 1}, coluna '${key}'. Esperado: '${expRow[key]}', Obtido: '${usrRow[usrKey]}'.` };
+      if (String(normalizedExp[key]) !== String(normalizedUsr[key])) {
+        return { solved: false, message: `Diferença de valores encontrada na linha ${i + 1}, coluna '${key}'. Esperado: '${normalizedExp[key]}', Obtido: '${normalizedUsr[key]}'.` };
       }
     }
   }
