@@ -252,8 +252,8 @@ export default function ExerciseModal({
                       <strong className="text-amber-300 capitalize">{targetSuspect.pele}</strong>
                     </li>
                     <li className="flex gap-2 text-xs font-mono">
-                      <span className="text-slate-400">Olhar:</span>
-                      <strong className="text-amber-300 capitalize">{targetSuspect.olhar}</strong>
+                      <span className="text-slate-400">Expressão:</span>
+                      <strong className="text-amber-300 capitalize">{targetSuspect.expressao}</strong>
                     </li>
                     <li className="flex gap-2 text-xs font-mono">
                       <span className="text-slate-400">Cabelo:</span>
