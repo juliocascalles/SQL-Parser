@@ -46,18 +46,18 @@ export const customers = [
 ];
 
 export const sales = [
-  { id: 1, product: "Teclado", quantity: 150, price: 120, customer_id: 1 },
-  { id: 2, product: "Mouse", quantity: 80, price: 60, customer_id: 2 },
-  { id: 3, product: "Monitor", quantity: 120, price: 1200, customer_id: 3 },
-  { id: 4, product: "Teclado", quantity: 90, price: 110, customer_id: 4 },
-  { id: 5, product: "Mouse", quantity: 200, price: 50, customer_id: 5 },
-  { id: 6, product: "Headset", quantity: 300, price: 250, customer_id: 6 },
-  { id: 7, product: "Monitor", quantity: 45, price: 1300, customer_id: 7 },
-  { id: 8, product: "Headset", quantity: 50, price: 280, customer_id: 8 },
-  { id: 9, product: "Teclado", quantity: 110, price: 120, customer_id: 9 },
-  { id: 10, product: "Gabinete", quantity: 15, price: 400, customer_id: 10 },
+  { id: 1, product: "Teclado", quantity: 150, price: 120, customer_id: 11 },
+  { id: 2, product: "Mouse", quantity: 80, price: 60, customer_id: 11 },
+  { id: 3, product: "Monitor", quantity: 120, price: 1200, customer_id: 11 },
+  { id: 4, product: "Teclado", quantity: 90, price: 110, customer_id: 20 },
+  { id: 5, product: "Mouse", quantity: 200, price: 50, customer_id: 20 },
+  { id: 6, product: "Headset", quantity: 300, price: 250, customer_id: 11 },
+  { id: 7, product: "Monitor", quantity: 45, price: 1300, customer_id: 20 },
+  { id: 8, product: "Headset", quantity: 50, price: 280, customer_id: 20 },
+  { id: 9, product: "Teclado", quantity: 110, price: 120, customer_id: 11 },
+  { id: 10, product: "Gabinete", quantity: 15, price: 400, customer_id: 11 },
   { id: 11, product: "Mouse", quantity: 130, price: 65, customer_id: 11 },
-  { id: 12, product: "Gabinete", quantity: 110, price: 380, customer_id: 12 }
+  { id: 12, product: "Gabinete", quantity: 110, price: 380, customer_id: 20 }
 ];
 
 export const products = [
@@ -164,9 +164,9 @@ export const EXERCISES: Exercise[] = [
   {
     id: "sales",
     title: "Exercício 2: Agrupamento de Vendas",
-    description: "Siga o fluxo de análise e agrupe a tabela 'sales' por produto (product). Filtre apenas vendas onde a quantidade é maior que 100 (quantity > 100). Ordene pela quantidade total em ordem decrescente (DESC) mostrando no máximo 5 registros.",
-    query: "SELECT product, quantity FROM sales WHERE quantity > 100 GROUP BY product ORDER BY quantity DESC LIMIT 5",
-    templateQuery: "SELECT product FROM sales WHERE quantity > 0",
+    description: "Siga o fluxo de análise e agrupe a tabela 'sales' por produto (product). Filtre apenas vendas do cliente com id igual a 11 (customer_id = 11). Retorne o produto (product) e a soma das quantidades identificada como 'total'. Ordene os resultados pelo total em ordem decrescente (DESC).",
+    query: "SELECT product, Sum(quantity) As total FROM sales WHERE customer_id = 11 GROUP BY product ORDER BY total DESC",
+    templateQuery: "SELECT * FROM sales WHERE customer_id = 15 GROUP BY product ORDER BY quantity DESC",
     targetTable: "sales"
   },
   {
@@ -393,14 +393,12 @@ export function executeSqlQuery(sql: string): { success: boolean; data?: any[]; 
     if (parsedFields.length > 0) {
       projected = grouped.map(row => {
         const projRow: Record<string, any> = {};
+        const rowKeys = Object.keys(row);
         parsedFields.forEach(pf => {
           let val = undefined;
-          if (row[pf.expr] !== undefined) {
-            val = row[pf.expr];
-          } else if (row[pf.expr.toUpperCase()] !== undefined) {
-            val = row[pf.expr.toUpperCase()];
-          } else if (row[pf.expr.toLowerCase()] !== undefined) {
-            val = row[pf.expr.toLowerCase()];
+          const targetKey = rowKeys.find(k => k.toLowerCase() === pf.expr.toLowerCase());
+          if (targetKey !== undefined) {
+            val = row[targetKey];
           } else {
             if (pf.expr.toLowerCase() === "count(*)") {
               val = row["count_all"];
