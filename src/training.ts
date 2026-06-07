@@ -48,7 +48,7 @@ export const customers = [
 export const sales = [
   { id: 1, product_id: 3, quantity: 150, customer_id: 11 },
   { id: 2, product_id: 4, quantity: 80, customer_id: 11 },
-  { id: 3, product_id: 7, quantity: 120, customer_id: 11 },
+  { id: 3, product_id: 6, quantity: 120, customer_id: 11 },
   { id: 4, product_id: 3, quantity: 90, customer_id: 2 },
   { id: 5, product_id: 4, quantity: 200, customer_id: 2 },
   { id: 6, product_id: 8, quantity: 300, customer_id: 11 },
