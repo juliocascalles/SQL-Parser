@@ -196,11 +196,51 @@ function getTableData(tableName: string): any[] | null {
   return null;
 }
 
+function normalizeFilterValue(val: string): string {
+  let clean = val.trim().toLowerCase();
+  
+  if (clean.startsWith("masculin")) return "masculino";
+  if (clean.startsWith("feminin")) return "feminino";
+  
+  if (clean === "negra" || clean === "negro") return "negra";
+  if (clean === "branca" || clean === "branco") return "branca";
+  if (clean === "parda" || clean === "pardo") return "parda";
+  if (clean === "amarela" || clean === "amarelo") return "amarela";
+  
+  if (clean === "nao" || clean === "não" || clean === "nâo") return "não";
+  if (clean === "sim") return "sim";
+  
+  if (clean === "desconfiado" || clean === "desconfiada") return "desconfiado";
+  if (clean === "piscando") return "piscando";
+  if (clean === "surpresa" || clean === "surpreso" || clean === "surpreendido") return "surpresa";
+  if (clean === "sorridente") return "sorridente";
+  
+  if (clean === "preto" || clean === "preta") return "preto";
+  if (clean === "castanho" || clean === "castanha") return "castanho";
+  if (clean === "loiro" || clean === "loira") return "loiro";
+  if (clean === "ruivo" || clean === "ruiva") return "ruivo";
+  if (clean === "longo" || clean === "longa") return "longo";
+  if (clean === "curto" || clean === "curta") return "curto";
+
+  return clean;
+}
+
 function evaluateCondition(conditionStr: string, context: Record<string, any>): boolean {
   try {
     const keys = Object.keys(context);
     const values = Object.values(context);
     
+    // Check if we are checking fields of suspects table
+    const isSuspectTable = ("sexo" in context) || ("pele" in context) || ("bigode" in context);
+    if (isSuspectTable) {
+      conditionStr = conditionStr.replace(/'([^']*)'/g, (match, p1) => {
+        return `'${normalizeFilterValue(p1)}'`;
+      });
+      conditionStr = conditionStr.replace(/"([^"]*)"/g, (match, p1) => {
+        return `"${normalizeFilterValue(p1)}"`;
+      });
+    }
+
     let jsCond = conditionStr
       .replace(/\bAND\b/gi, " && ")
       .replace(/\bOR\b/gi, " || ")
