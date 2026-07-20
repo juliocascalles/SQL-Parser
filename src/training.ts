@@ -603,6 +603,15 @@ export function executeSqlQuery(sql: string): { success: boolean; data?: any[]; 
           }
           projRow[aliasName] = val !== undefined ? val : null;
         });
+
+        // Attach original row as non-enumerable property for ORDER BY to use
+        Object.defineProperty(projRow, "_rawRow", {
+          value: row,
+          enumerable: false,
+          writable: true,
+          configurable: true
+        });
+
         return projRow;
       });
     } else {
@@ -615,6 +624,15 @@ export function executeSqlQuery(sql: string): { success: boolean; data?: any[]; 
             delete cleanRow[k];
           }
         });
+
+        // Attach original row as non-enumerable property for ORDER BY to use
+        Object.defineProperty(cleanRow, "_rawRow", {
+          value: row,
+          enumerable: false,
+          writable: true,
+          configurable: true
+        });
+
         return cleanRow;
       });
     }
@@ -626,17 +644,25 @@ export function executeSqlQuery(sql: string): { success: boolean; data?: any[]; 
           const col = order.column;
           const dir = order.direction;
 
-          let valA = getValueFromRow(col, a);
-          if (valA === undefined) valA = a[col];
-          let valB = getValueFromRow(col, b);
-          if (valB === undefined) valB = b[col];
+          let valA = a[col];
+          let valB = b[col];
 
           if (valA === undefined) {
-             const matchedKey = Object.keys(a).find(k => k.toLowerCase() === col.toLowerCase());
+             // Try matching case-insensitively on the projected row
+             const colWithoutPrefix = col.includes(".") ? col.split(".").pop()! : col;
+             const matchedKey = Object.keys(a).find(k => k.toLowerCase() === col.toLowerCase() || k.toLowerCase() === colWithoutPrefix.toLowerCase());
              if (matchedKey) {
                valA = a[matchedKey];
                valB = b[matchedKey];
              }
+          }
+
+          // If still undefined, try fetching from the original unprojected row
+          if (valA === undefined && a._rawRow) {
+             valA = getValueFromRow(col, a._rawRow);
+          }
+          if (valB === undefined && b._rawRow) {
+             valB = getValueFromRow(col, b._rawRow);
           }
 
           if (valA === undefined || valB === undefined) continue;
