@@ -9,13 +9,14 @@ import {
   AlertCircle 
 } from "lucide-react";
 import { TableFieldInfo, generateSqlExerciseFile, CustomExercise } from "../insert";
+import { formatSqlWithIndentation } from "../optimization";
 
 interface InsertDataModalProps {
   isOpen: boolean;
   onClose: () => void;
   tables: TableFieldInfo[];
   originalQuery: string;
-  onSaveCustomExercise: (exercise: CustomExercise, customDb: Record<string, any[]>) => void;
+  showFeedback: (type: "success" | "error", text: string) => void;
 }
 
 export default function InsertDataModal({
@@ -23,7 +24,7 @@ export default function InsertDataModal({
   onClose,
   tables,
   originalQuery,
-  onSaveCustomExercise
+  showFeedback
 }: InsertDataModalProps) {
   const [title, setTitle] = useState("");
   const [enunciado, setEnunciado] = useState("");
@@ -154,41 +155,9 @@ export default function InsertDataModal({
       }
     }
 
-    // Generate the custom database object format for training.ts
-    const customDb: Record<string, any[]> = {};
-    for (const table of tables) {
-      const rows = rowsData[table.tableName] || [];
-      customDb[table.tableName.toLowerCase()] = rows.map(row => {
-        const rowObj: Record<string, any> = {};
-        for (const field of table.fields) {
-          const val = row[field].trim();
-          // Cast numbers
-          if (/^-?\d+$/.test(val)) {
-            rowObj[field] = parseInt(val, 10);
-          } else if (/^-?\d*\.\d+$/.test(val)) {
-            rowObj[field] = parseFloat(val);
-          } else if (val.toUpperCase() === "NULL") {
-            rowObj[field] = null;
-          } else {
-            rowObj[field] = val;
-          }
-        }
-        return rowObj;
-      });
-    }
-
-    // Generate SQL file content
-    const sqlContent = generateSqlExerciseFile(enunciado, tables, rowsData, originalQuery);
-
-    // Create the exercise definition object
-    const customExercise: CustomExercise = {
-      id: "custom",
-      title: `Exercício: ${title}`,
-      description: enunciado,
-      query: originalQuery,
-      templateQuery: `SELECT * FROM ${tables[0].tableName}`,
-      targetTable: tables[0].tableName
-    };
+    // Generate SQL file content with formatted query
+    const formattedQuery = formatSqlWithIndentation(originalQuery);
+    const sqlContent = generateSqlExerciseFile(enunciado, tables, rowsData, formattedQuery);
 
     // Download the .SQL file
     const blob = new Blob([sqlContent], { type: "text/plain;charset=utf-8" });
@@ -201,8 +170,8 @@ export default function InsertDataModal({
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
 
-    // Callback to save to state & load in App.tsx
-    onSaveCustomExercise(customExercise, customDb);
+    // Notify user to upload the generated file to activate
+    showFeedback("success", "Para habilitar esse exercício carregue o arquivo gerado.");
     onClose();
   };
 
@@ -372,7 +341,7 @@ export default function InsertDataModal({
               className="px-4.5 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-lg active:scale-95 cursor-pointer"
             >
               <Save className="w-4 h-4 text-slate-950" />
-              <span>Salvar e Baixar .SQL</span>
+              <span>Salvar</span>
             </button>
           </div>
         </div>

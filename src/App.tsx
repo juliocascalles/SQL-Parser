@@ -210,32 +210,6 @@ export default function App() {
     setIsInsertModalOpen(true);
   };
 
-  const handleSaveCustomExercise = (exercise: CustomExercise, customDb: Record<string, any[]>) => {
-    // 1. Set state variables
-    setCustomExercise(exercise);
-    setCustomDatabase(customDb);
-
-    // 2. Register in EXERCISES list dynamically
-    const existingIdx = EXERCISES.findIndex(ex => ex.id === "custom");
-    if (existingIdx !== -1) {
-      EXERCISES[existingIdx] = exercise;
-    } else {
-      EXERCISES.push(exercise);
-    }
-
-    // 3. Load the exercise and open its modal
-    setActiveExerciseId("custom");
-    if (!sqlQuery.trim()) {
-      setSqlQuery(exercise.templateQuery);
-      if (blocklyRebuiltCallbackRef.current) {
-        blocklyRebuiltCallbackRef.current(exercise.templateQuery);
-      }
-    }
-
-    showFeedback("success", `Exercício "${exercise.title.replace("Exercício: ", "")}" foi criado e carregado!`);
-    setIsExerciseModalOpen(true);
-  };
-
   // Triggered on Blockly block configuration change
   const handleBlocklySqlChange = (newSql: string) => {
     if (indentFormat) {
@@ -820,7 +794,7 @@ export default function App() {
         onClose={() => setIsInsertModalOpen(false)}
         tables={insertTables}
         originalQuery={sqlQuery}
-        onSaveCustomExercise={handleSaveCustomExercise}
+        showFeedback={showFeedback}
       />
     </div>
   );
