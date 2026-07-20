@@ -24,6 +24,14 @@ import { translateSql } from "./translate";
 import { optimizeSqlQuery, formatSqlWithIndentation } from "./optimization";
 import ExerciseModal from "./components/ExerciseModal";
 import { EXERCISES, getRandomSuspect, Suspect } from "./training";
+import { 
+  extractFieldsAndTablesForInsert, 
+  parseSqlFileToCustomExercise, 
+  setCustomDatabase, 
+  CustomExercise, 
+  TableFieldInfo 
+} from "./insert";
+import InsertDataModal from "./components/InsertDataModal";
 
 // Define supported translation target languages
 interface LanguageOption {
@@ -101,6 +109,11 @@ export default function App() {
   const [targetSuspect, setTargetSuspect] = useState<Suspect | null>(null);
   const [isExerciseModalOpen, setIsExerciseModalOpen] = useState<boolean>(false);
 
+  // Custom user exercises and data insertion states
+  const [customExercise, setCustomExercise] = useState<CustomExercise | null>(null);
+  const [isInsertModalOpen, setIsInsertModalOpen] = useState<boolean>(false);
+  const [insertTables, setInsertTables] = useState<TableFieldInfo[]>([]);
+
   // Reference callback to invoke the Block reconstruction on SqlBlockly
   const blocklyRebuiltCallbackRef = useRef<((sql: string) => void) | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -118,11 +131,40 @@ export default function App() {
     reader.onload = (event) => {
       const text = event.target?.result as string;
       if (text) {
-        setSqlQuery(text);
-        if (blocklyRebuiltCallbackRef.current) {
-          blocklyRebuiltCallbackRef.current(text);
+        // Try parsing as custom database exercise with INSERTs and final SELECT
+        const customRes = parseSqlFileToCustomExercise(text, file.name);
+        if (customRes) {
+          // Store custom exercise & custom database rows
+          setCustomExercise(customRes.exercise);
+          setCustomDatabase(customRes.customDb);
+
+          // Register in the EXERCISES array dynamically
+          const existingIdx = EXERCISES.findIndex(ex => ex.id === "custom");
+          if (existingIdx !== -1) {
+            EXERCISES[existingIdx] = customRes.exercise;
+          } else {
+            EXERCISES.push(customRes.exercise);
+          }
+
+          // Active customized exercise tab & load template query
+          setActiveExerciseId("custom");
+          if (!sqlQuery.trim()) {
+            setSqlQuery(customRes.exercise.templateQuery);
+            if (blocklyRebuiltCallbackRef.current) {
+              blocklyRebuiltCallbackRef.current(customRes.exercise.templateQuery);
+            }
+          }
+
+          showFeedback("success", `Exercício personalizado "${file.name.replace(/\.sql$/i, "")}" carregado com sucesso!`);
+          setIsExerciseModalOpen(true);
+        } else {
+          // Regular .SQL query file
+          setSqlQuery(text);
+          if (blocklyRebuiltCallbackRef.current) {
+            blocklyRebuiltCallbackRef.current(text);
+          }
+          showFeedback("success", "Arquivo SQL carregado com sucesso!");
         }
-        showFeedback("success", "Arquivo SQL carregado com sucesso!");
       }
     };
     reader.readAsText(file);
@@ -150,6 +192,48 @@ export default function App() {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
     showFeedback("success", "Sua query foi baixada com sucesso!");
+  };
+
+  const handleOpenInsertDataModal = () => {
+    if (!sqlQuery || !sqlQuery.trim()) {
+      showFeedback("error", "Não há nenhuma query escrita para extrair os campos. Monte ou digite uma query SQL primeiro!");
+      return;
+    }
+
+    const extracted = extractFieldsAndTablesForInsert(sqlQuery);
+    if (!extracted) {
+      showFeedback("error", "Não foi possível extrair campos da query atual. Certifique-se de que é uma consulta SELECT válida com colunas explícitas!");
+      return;
+    }
+
+    setInsertTables(extracted);
+    setIsInsertModalOpen(true);
+  };
+
+  const handleSaveCustomExercise = (exercise: CustomExercise, customDb: Record<string, any[]>) => {
+    // 1. Set state variables
+    setCustomExercise(exercise);
+    setCustomDatabase(customDb);
+
+    // 2. Register in EXERCISES list dynamically
+    const existingIdx = EXERCISES.findIndex(ex => ex.id === "custom");
+    if (existingIdx !== -1) {
+      EXERCISES[existingIdx] = exercise;
+    } else {
+      EXERCISES.push(exercise);
+    }
+
+    // 3. Load the exercise and open its modal
+    setActiveExerciseId("custom");
+    if (!sqlQuery.trim()) {
+      setSqlQuery(exercise.templateQuery);
+      if (blocklyRebuiltCallbackRef.current) {
+        blocklyRebuiltCallbackRef.current(exercise.templateQuery);
+      }
+    }
+
+    showFeedback("success", `Exercício "${exercise.title.replace("Exercício: ", "")}" foi criado e carregado!`);
+    setIsExerciseModalOpen(true);
   };
 
   // Triggered on Blockly block configuration change
@@ -318,7 +402,7 @@ export default function App() {
               <h1 className="text-xl font-display font-bold tracking-tight text-white flex items-center gap-2">
                 SQL-Parser
                 <span className="text-[10px] uppercase font-mono tracking-widest px-1.5 py-0.5 rounded bg-cyan-950/60 text-cyan-400 font-bold border border-cyan-800">
-                  v1.2026.06.07
+                  v1.2026.07.20
                 </span>
               </h1>
               <p className="text-xs text-slate-400">
@@ -377,6 +461,31 @@ export default function App() {
             >
               Suspeito 🔍
             </button>
+            {customExercise && (
+              <button
+                id="example-btn-custom"
+                onClick={() => {
+                  setActiveExerciseId("custom");
+                  if (!sqlQuery.trim()) {
+                    setSqlQuery(customExercise.templateQuery);
+                    if (blocklyRebuiltCallbackRef.current) {
+                      blocklyRebuiltCallbackRef.current(customExercise.templateQuery);
+                    }
+                    showFeedback("success", `Exercício "Personalizado" carregado com sucesso!`);
+                  } else {
+                    showFeedback("success", `Exercício alterado para "Personalizado". Mantendo sua query atual.`);
+                  }
+                  setIsExerciseModalOpen(true);
+                }}
+                className={`px-2.5 py-1 text-xs font-semibold rounded-lg border transition-all cursor-pointer select-none ${
+                  activeExerciseId === "custom"
+                    ? "bg-amber-950/40 border-amber-500/60 text-amber-300 shadow"
+                    : "bg-slate-900 border-slate-800 text-slate-300 hover:text-amber-400 hover:border-slate-700"
+                }`}
+              >
+                Personalizado 🌟
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -444,6 +553,18 @@ export default function App() {
                   >
                     <Download className="w-3.5 h-3.5 text-sky-500 group-hover:text-sky-400 transition-colors" />
                     <span>Salvar .SQL</span>
+                  </button>
+
+                  {/* Button: Inserir dados */}
+                  <button
+                    id="insert-data-btn"
+                    onClick={handleOpenInsertDataModal}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-950 hover:bg-amber-955/65 text-slate-400 hover:text-amber-300 border border-slate-800 hover:border-amber-900/60 rounded-lg text-xs font-semibold cursor-pointer active:scale-95 transition-all select-none group shadow-inner"
+                    title="Inserir dados para gerar novo exercício"
+                    aria-label="Inserir dados"
+                  >
+                    <Database className="w-3.5 h-3.5 text-amber-500 group-hover:text-amber-400 transition-colors" />
+                    <span>Inserir dados</span>
                   </button>
                 </div>
 
@@ -691,6 +812,15 @@ export default function App() {
           setTargetSuspect(nextS);
           showFeedback("success", "Novo caso sorteado! Um novo suspeito foi gerado.");
         }}
+      />
+
+      {/* Custom SQL Exercise Creator Modal (v1.2026.07.20) */}
+      <InsertDataModal
+        isOpen={isInsertModalOpen}
+        onClose={() => setIsInsertModalOpen(false)}
+        tables={insertTables}
+        originalQuery={sqlQuery}
+        onSaveCustomExercise={handleSaveCustomExercise}
       />
     </div>
   );

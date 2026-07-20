@@ -1,5 +1,6 @@
 // Database datasets and in-memory SQL execution engine for interactive exercises.
 import { parseSqlStringToData } from "./parser";
+import { customDatabase } from "./insert";
 
 import aline_nobre from "../assets/images/aline_nobre.svg";
 import ana_clara from "../assets/images/ana_clara.svg";
@@ -193,6 +194,9 @@ function getTableData(tableName: string): any[] | null {
   if (name === "sales" || name === "vendas") return sales;
   if (name === "products" || name === "produtos" || name === "product") return products;
   if (name === "suspeitos") return suspeitos;
+  if (customDatabase && customDatabase[name]) {
+    return customDatabase[name];
+  }
   return null;
 }
 
