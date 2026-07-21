@@ -15,11 +15,16 @@ export interface CustomExercise {
 }
 
 // Global in-memory storage for loaded custom exercise data
-export let customDatabase: Record<string, any[]> = {};
+export const customDatabase: Record<string, any[]> = {};
 
 // Allows clearing or replacing custom database records
 export function setCustomDatabase(db: Record<string, any[]>) {
-  customDatabase = db;
+  // Clear existing keys
+  for (const key of Object.keys(customDatabase)) {
+    delete customDatabase[key];
+  }
+  // Assign new keys
+  Object.assign(customDatabase, db);
 }
 
 /**

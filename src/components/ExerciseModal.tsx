@@ -16,6 +16,29 @@ import {
   verifySolution,
   suspeitos
 } from "../training";
+import { customDatabase } from "../insert";
+
+// Helper to extract involved tables from a query
+const getTablesFromQuery = (query: string, customDb: Record<string, any[]> | null): string[] => {
+  const lowercaseQuery = query.toLowerCase();
+  const foundTables = new Set<string>();
+  
+  const candidateTables = ["customers", "sales", "products", "suspeitos", "clientes", "vendas", "produtos", "product"];
+  if (customDb) {
+    Object.keys(customDb).forEach(key => {
+      candidateTables.push(key);
+    });
+  }
+
+  candidateTables.forEach(t => {
+    const regex = new RegExp(`\\b${t}\\b`, "i");
+    if (regex.test(lowercaseQuery)) {
+      foundTables.add(t.toLowerCase());
+    }
+  });
+
+  return Array.from(foundTables);
+};
 
 interface ExerciseModalProps {
   isOpen: boolean;
@@ -277,10 +300,26 @@ export default function ExerciseModal({
                   {selectedExercise.description}
                 </p>
               )}
-              <div className="flex items-center gap-1.5 mt-3">
-                <span className="text-[9px] text-slate-450 font-semibold uppercase tracking-wider">Tabela alvo:</span>
-                <span className="text-[9px] font-mono bg-slate-950 px-2 py-0.5 border border-slate-850 rounded text-amber-300 font-bold uppercase">{selectedExercise.targetTable}</span>
-              </div>
+              {(() => {
+                const hasJoin = selectedExercise.query.toUpperCase().includes("JOIN");
+                const targetTablesList = hasJoin 
+                  ? getTablesFromQuery(selectedExercise.query, customDatabase) 
+                  : [selectedExercise.targetTable];
+                const finalTables = targetTablesList.length > 0 ? targetTablesList : [selectedExercise.targetTable];
+
+                return (
+                  <div className="flex items-center gap-1.5 mt-3 flex-wrap">
+                    <span className="text-[9px] text-slate-450 font-semibold uppercase tracking-wider">
+                      {finalTables.length > 1 ? "Tabelas alvo:" : "Tabela alvo:"}
+                    </span>
+                    {finalTables.map((t, idx) => (
+                      <span key={idx} className="text-[9px] font-mono bg-slate-950 px-2 py-0.5 border border-slate-850 rounded text-amber-300 font-bold uppercase">
+                        {t}
+                      </span>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
           </div>
 
