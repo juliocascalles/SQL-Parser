@@ -2,6 +2,223 @@
 // Built to handle commas outside quotes/parens for SELECT, GROUP BY, and ORDER BY;
 // separates JOIN clauses with individual ON conditions; and parses WHERE conditions recursively.
 
+import { customDatabase } from "./insert";
+
+const KNOWN_STRING_OR_DATE_FIELDS = new Set([
+  "name", "email", "country", "item", "category",
+  "nome", "sexo", "cor_cabelo", "tamanho_cabelo", "expressao", "bigode", "barba", "pele", "imagem",
+  "sale_date", "date", "data", "created_at", "updated_at", "birth_date", "data_nascimento"
+]);
+
+const KNOWN_NUMERIC_FIELDS = new Set([
+  "id", "age", "price", "quantity", "stock", "customer_id", "product_id"
+]);
+
+export function isCharOrDateField(fieldName: string, sampleVal?: string): boolean {
+  if (!fieldName) return false;
+
+  let clean = fieldName.trim().toLowerCase();
+  if (clean.includes(".")) {
+    clean = clean.split(".").pop() || clean;
+  }
+
+  if (KNOWN_STRING_OR_DATE_FIELDS.has(clean)) return true;
+  if (KNOWN_NUMERIC_FIELDS.has(clean)) return false;
+
+  if (customDatabase) {
+    for (const tbl of Object.keys(customDatabase)) {
+      const rows = customDatabase[tbl];
+      if (Array.isArray(rows) && rows.length > 0) {
+        for (const r of rows) {
+          if (r && r[clean] !== undefined && r[clean] !== null) {
+            if (typeof r[clean] === "string") return true;
+            if (typeof r[clean] === "number") return false;
+          }
+        }
+      }
+    }
+  }
+
+  const charDatePattern = /(name|nome|email|mail|country|pais|estado|uf|city|cidade|address|end|rua|bairro|sexo|gender|cor|color|cabelo|hair|tamanho|expressao|bigode|barba|pele|skin|image|imagem|img|category|categoria|item|produto|product|desc|descricao|description|title|titulo|tipo|type|status|situacao|cpf|cnpj|rg|phone|tel|codigo|code|cep|varchar|char|text|date|data|dt_|_dt|time|tempo|nascimento|created|updated)/i;
+
+  if (charDatePattern.test(clean)) return true;
+
+  if (sampleVal) {
+    const s = sampleVal.trim().replace(/^['"]|['"]$/g, "");
+    if (/^\d{4}[-/.]\d{2}[-/.]\d{2}/.test(s) || /^\d{2}[-/.]\d{2}[-/.]\d{4}/.test(s)) return true;
+    if (isNaN(Number(s)) && !/^(true|false|null)$/i.test(s)) return true;
+  }
+
+  return false;
+}
+
+export function ensureQuotesOnWhereValue(field: string, op: string, val: string): string {
+  if (!val) return "''";
+
+  let cleanVal = val.trim();
+  const upperOp = (op || "=").toUpperCase().trim();
+
+  // If already enclosed in single quotes or double quotes
+  if ((cleanVal.startsWith("'") && cleanVal.endsWith("'")) || (cleanVal.startsWith('"') && cleanVal.endsWith('"'))) {
+    if (cleanVal.startsWith('"') && cleanVal.endsWith('"')) {
+      cleanVal = `'${cleanVal.slice(1, -1)}'`;
+    }
+    return cleanVal;
+  }
+
+  // Handle NULL / TRUE / FALSE keywords
+  if (/^(NULL|TRUE|FALSE)$/i.test(cleanVal)) {
+    return cleanVal;
+  }
+
+  // Handle column-to-column comparison (e.g. pedido.produto_id = produto.id or alias.col)
+  if (cleanVal.includes(".") && /^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$/.test(cleanVal)) {
+    return cleanVal;
+  }
+
+  // Handle IN operator
+  if (upperOp === "IN") {
+    let inner = cleanVal;
+    let hasParens = false;
+    if (inner.startsWith("(") && inner.endsWith(")")) {
+      inner = inner.substring(1, inner.length - 1).trim();
+      hasParens = true;
+    }
+
+    if (/^SELECT\b/i.test(inner)) {
+      return cleanVal;
+    }
+
+    const items = inner.split(",").map(item => {
+      const trimmed = item.trim();
+      if (!trimmed) return "''";
+      if ((trimmed.startsWith("'") && trimmed.endsWith("'")) || (trimmed.startsWith('"') && trimmed.endsWith('"'))) {
+        return trimmed.startsWith('"') ? `'${trimmed.slice(1, -1)}'` : trimmed;
+      }
+      if (/^(NULL|TRUE|FALSE)$/i.test(trimmed)) return trimmed;
+      if (/^-?\d+(?:\.\d+)?$/.test(trimmed) && !isCharOrDateField(field, trimmed)) {
+        return trimmed;
+      }
+      return `'${trimmed.replace(/'/g, "''")}'`;
+    });
+
+    const formattedList = items.join(", ");
+    return hasParens ? `(${formattedList})` : formattedList;
+  }
+
+  // Handle BETWEEN operator
+  if (upperOp === "BETWEEN") {
+    const andMatch = /\bAND\b/i.exec(cleanVal);
+    if (andMatch) {
+      const part1 = cleanVal.substring(0, andMatch.index).trim();
+      const part2 = cleanVal.substring(andMatch.index + 3).trim();
+      const q1 = ensureQuotesOnWhereValue(field, "=", part1);
+      const q2 = ensureQuotesOnWhereValue(field, "=", part2);
+      return `${q1} AND ${q2}`;
+    }
+  }
+
+  const isCharOrDate = isCharOrDateField(field, cleanVal);
+  const isNumeric = /^-?\d+(?:\.\d+)?$/.test(cleanVal);
+  const isDatePattern = /^\d{4}[-/.]\d{2}[-/.]\d{2}/.test(cleanVal) || /^\d{2}[-/.]\d{2}[-/.]\d{4}/.test(cleanVal);
+
+  if (isCharOrDate || isDatePattern || !isNumeric) {
+    if (isCharOrDate || !isNumeric || isDatePattern) {
+      const escaped = cleanVal.replace(/'/g, "''");
+      return `'${escaped}'`;
+    }
+  }
+
+  return cleanVal;
+}
+
+export function autoQuoteWhereClause(whereStr: string): string {
+  if (!whereStr || !whereStr.trim()) return whereStr;
+  return processWhereBranch(whereStr);
+}
+
+function processWhereBranch(expr: string): string {
+  const clean = expr.trim();
+  if (!clean) return clean;
+
+  if (/^CASE\b/i.test(clean) || /^SELECT\b/i.test(clean)) {
+    return clean;
+  }
+
+  if (clean.startsWith("(") && clean.endsWith(")")) {
+    let depth = 0;
+    let balanced = true;
+    for (let i = 0; i < clean.length; i++) {
+      if (clean[i] === "(") depth++;
+      else if (clean[i] === ")") {
+        depth--;
+        if (depth === 0 && i < clean.length - 1) {
+          balanced = false;
+        }
+      }
+    }
+    if (balanced && depth === 0) {
+      return "(" + processWhereBranch(clean.slice(1, -1)) + ")";
+    }
+  }
+
+  let parenDepth = 0;
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+  let betweenCount = 0;
+
+  for (let i = 0; i < clean.length; i++) {
+    const char = clean[i];
+    if (char === "'" && !inDoubleQuote) inSingleQuote = !inSingleQuote;
+    else if (char === '"' && !inSingleQuote) inDoubleQuote = !inDoubleQuote;
+
+    if (inSingleQuote || inDoubleQuote) continue;
+
+    if (char === "(") parenDepth++;
+    else if (char === ")") parenDepth--;
+
+    if (parenDepth === 0) {
+      const subBetween = clean.substring(i, i + 7).toUpperCase();
+      if (subBetween === "BETWEEN" && (i === 0 || !/\w/.test(clean[i - 1])) && (i + 7 === clean.length || !/\w/.test(clean[i + 7]))) {
+        betweenCount++;
+      }
+
+      const subOR = clean.substring(i, i + 4).toUpperCase();
+      if ((subOR === " OR " || subOR === "\tOR ") && i > 0) {
+        const left = clean.substring(0, i);
+        const right = clean.substring(i + 4);
+        return `${processWhereBranch(left)} OR ${processWhereBranch(right)}`;
+      }
+
+      const subAND = clean.substring(i, i + 5).toUpperCase();
+      if ((subAND === " AND " || subAND === "\tAND ") && i > 0) {
+        if (betweenCount > 0) {
+          betweenCount--;
+        } else {
+          const left = clean.substring(0, i);
+          const right = clean.substring(i + 5);
+          return `${processWhereBranch(left)} AND ${processWhereBranch(right)}`;
+        }
+      }
+    }
+  }
+
+  const ops = ["NOT LIKE", "LIKE", "IN", "BETWEEN", ">=", "<=", "!=", "<>", "=", ">", "<"];
+  for (const op of ops) {
+    const regex = new RegExp(`^(.+?)\\s+(${op})\\s+(.+)$`, "i");
+    const match = regex.exec(clean);
+    if (match) {
+      const field = match[1].trim();
+      const rawVal = match[3].trim();
+
+      const quotedVal = ensureQuotesOnWhereValue(field, match[2], rawVal);
+      return `${field} ${match[2]} ${quotedVal}`;
+    }
+  }
+
+  return clean;
+}
+
 export interface JoinData {
   joinType: string;
   table: string;
@@ -337,7 +554,7 @@ export function parseSqlStringToData(sql: string): ParsedSqlQuery {
   const { mainTable, joins } = parseFromAndJoins(clauses.FROM);
 
   // 3. WHERE clause string format mapping
-  const whereCondition = clauses.WHERE || "";
+  const whereCondition = clauses.WHERE ? autoQuoteWhereClause(clauses.WHERE) : "";
 
   // 4. GROUP BY fields split by comma
   const groupByFields = clauses.GROUP_BY ? splitSmart(clauses.GROUP_BY) : [];

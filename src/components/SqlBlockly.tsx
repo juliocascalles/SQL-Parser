@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import * as Blockly from "blockly";
-import { parseSqlStringToData } from "../parser.ts";
+import { parseSqlStringToData, ensureQuotesOnWhereValue } from "../parser.ts";
 import { Columns, Database, Filter, Layers, ArrowDownAZ, GitMerge } from "lucide-react";
 
 // Define the mutable list of support functions for the function item dropdown
@@ -377,7 +377,8 @@ export function parseConditionBlock(block: any): string {
     const op = block.getFieldValue("OPERATOR") || "=";
     const val = block.getFieldValue("VALUE") || "";
     if (!field) return "";
-    return `${field} ${op} ${val ? val : "''"}`;
+    const formattedVal = ensureQuotesOnWhereValue(field, op, val);
+    return `${field} ${op} ${formattedVal}`;
   }
 
   if (type === "sql_where_and") {
@@ -1220,7 +1221,8 @@ export function buildWhereBlockRecursively(whereStr: string, workspace: any): an
     block.render();
     block.setFieldValue(field, "FIELD");
     block.setFieldValue(foundOp.op, "OPERATOR");
-    block.setFieldValue(value, "VALUE");
+    const formattedVal = ensureQuotesOnWhereValue(field, foundOp.op, value);
+    block.setFieldValue(formattedVal, "VALUE");
     return block;
   }
 

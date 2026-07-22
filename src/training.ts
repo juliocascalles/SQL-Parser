@@ -1,5 +1,5 @@
 // Database datasets and in-memory SQL execution engine for interactive exercises.
-import { parseSqlStringToData } from "./parser";
+import { parseSqlStringToData, autoQuoteWhereClause } from "./parser";
 import { customDatabase } from "./insert";
 
 import aline_nobre from "../assets/images/aline_nobre.svg";
@@ -231,6 +231,7 @@ function normalizeFilterValue(val: string): string {
 
 function evaluateCondition(conditionStr: string, context: Record<string, any>): boolean {
   try {
+    conditionStr = autoQuoteWhereClause(conditionStr);
     const keys = Object.keys(context);
     const values = Object.values(context);
     
