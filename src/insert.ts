@@ -27,8 +27,85 @@ export function setCustomDatabase(db: Record<string, any[]>) {
   Object.assign(customDatabase, db);
 }
 
+export interface ExtractInsertResult {
+  tables: TableFieldInfo[];
+  augmentedQuery: string;
+}
+
+function isColInSelectFields(tableAlias: string, tableName: string, col: string, selectFields: string[]): boolean {
+  const colLower = col.toLowerCase();
+  const aliasLower = tableAlias.toLowerCase();
+  const nameLower = tableName.toLowerCase();
+
+  for (const f of selectFields) {
+    let cleanF = f.trim();
+
+    // Trim "AS alias" or space-separated alias at the end
+    const asMatch = /\s+AS\s+([A-Za-z0-9_]+)$/i.exec(cleanF);
+    if (asMatch) {
+      cleanF = cleanF.substring(0, asMatch.index).trim();
+    } else {
+      const spaceMatch = /([A-Za-z0-9_*()]+)\s+([A-Za-z0-9_]+)$/i.exec(cleanF);
+      if (spaceMatch && !/^(AND|OR|AS)$/i.test(spaceMatch[2])) {
+        cleanF = spaceMatch[1].trim();
+      }
+    }
+
+    const cleanFLower = cleanF.toLowerCase();
+
+    if (cleanFLower === colLower) return true;
+    if (cleanFLower === `${aliasLower}.${colLower}`) return true;
+    if (cleanFLower === `${nameLower}.${colLower}`) return true;
+    if (cleanFLower.endsWith(`.${colLower}`)) return true;
+  }
+  return false;
+}
+
+export function addMissingSelectFieldsToSql(sql: string, missingFields: string[]): string {
+  if (!missingFields || missingFields.length === 0) return sql;
+
+  let parenDepth = 0;
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+  let inBacktick = false;
+
+  let fromIndex = -1;
+  const upper = sql.toUpperCase();
+
+  for (let i = 0; i < sql.length; i++) {
+    const char = sql[i];
+    if (char === "\\" && (inSingleQuote || inDoubleQuote || inBacktick)) {
+      i++;
+      continue;
+    }
+    if (char === "'" && !inDoubleQuote && !inBacktick) inSingleQuote = !inSingleQuote;
+    else if (char === '"' && !inSingleQuote && !inBacktick) inDoubleQuote = !inDoubleQuote;
+    else if (char === "`" && !inSingleQuote && !inDoubleQuote) inBacktick = !inBacktick;
+    else if (!inSingleQuote && !inDoubleQuote && !inBacktick) {
+      if (char === "(") parenDepth++;
+      else if (char === ")") parenDepth--;
+      else if (parenDepth === 0) {
+        if (upper.substring(i, i + 4) === "FROM" && (i === 0 || /\s/.test(sql[i - 1])) && (i + 4 === sql.length || /\s/.test(sql[i + 4]))) {
+          fromIndex = i;
+          break;
+        }
+      }
+    }
+  }
+
+  if (fromIndex === -1) return sql;
+
+  const selectPart = sql.substring(0, fromIndex).trimEnd();
+  const restPart = sql.substring(fromIndex);
+
+  const fieldsToAddStr = missingFields.join(", ");
+
+  return `${selectPart}, ${fieldsToAddStr} ${restPart}`;
+}
+
 /**
  * Extracts table names and select fields from an active SELECT query to build INSERT inputs.
+ * Also extracts relationship fields from JOIN ON/USING conditions if missing in SELECT.
  */
 export function extractFieldsAndTablesForInsert(sql: string): TableFieldInfo[] | null {
   if (!sql || !sql.trim()) return null;
@@ -104,6 +181,43 @@ export function extractFieldsAndTablesForInsert(sql: string): TableFieldInfo[] |
       } else {
         // No dot prefix, assign to the mainTable
         groupedFields[tablesList[0].name].add(expr);
+      }
+    }
+
+    // Extract relationship fields from JOIN ON/USING conditions
+    if (parsed.joins) {
+      for (const j of parsed.joins) {
+        if (!j.onCondition) continue;
+
+        const cleanCond = j.onCondition.replace(/'[^']*'/g, "''").replace(/"[^"]*"/g, '""');
+
+        const joinRefRegex = /\b([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\b/g;
+        let match: RegExpExecArray | null;
+
+        while ((match = joinRefRegex.exec(cleanCond)) !== null) {
+          const prefix = match[1].trim();
+          const col = match[2].trim();
+          const prefixLower = prefix.toLowerCase();
+          const targetTable = aliasMap[prefixLower];
+
+          if (targetTable) {
+            groupedFields[targetTable].add(col);
+          }
+        }
+
+        if (cleanCond.toUpperCase().includes("USING")) {
+          const usingMatch = /\bUSING\s*\(([^)]+)\)/i.exec(cleanCond);
+          if (usingMatch) {
+            const cols = usingMatch[1].split(",").map(c => c.trim().replace(/[\[\]`"]/g, ""));
+            for (const col of cols) {
+              if (col) {
+                for (const t of tablesList) {
+                  groupedFields[t.name].add(col);
+                }
+              }
+            }
+          }
+        }
       }
     }
 

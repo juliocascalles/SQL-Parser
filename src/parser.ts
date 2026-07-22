@@ -299,7 +299,7 @@ export function parseFromAndJoins(fromStr: string): { mainTable: string; joins: 
     const end = (j + 1 < matches.length) ? matches[j + 1].index : cleanFrom.length;
     const chunk = cleanFrom.substring(start, end).trim();
 
-    // Split chunk into target table and query condition based on ON keyword
+    // Split chunk into target table and query condition based on ON or USING keyword
     const onIndex = chunk.search(/\bON\b/i);
     let table = chunk;
     let onCondition = "";
@@ -307,6 +307,12 @@ export function parseFromAndJoins(fromStr: string): { mainTable: string; joins: 
     if (onIndex !== -1) {
       table = chunk.substring(0, onIndex).trim();
       onCondition = chunk.substring(onIndex + 2).trim();
+    } else {
+      const usingIndex = chunk.search(/\bUSING\b/i);
+      if (usingIndex !== -1) {
+        table = chunk.substring(0, usingIndex).trim();
+        onCondition = chunk.substring(usingIndex).trim();
+      }
     }
 
     joins.push({
